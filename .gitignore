@@ -1,0 +1,22 @@
+# 密钥与环境变量（绝不提交）
+.env
+
+# Python
+__pycache__/
+*.pyc
+
+# 运行时数据（可重建）
+chat.db
+faiss_store/
+
+# IDE 与生成产物
+.idea/
+.screenshots/
+ppt_share/
+*.pptx
+
+# 日志文件
+*.log
+content_log*.txt
+validate_log*.txt
+make_pptx*.js

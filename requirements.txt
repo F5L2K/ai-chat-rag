@@ -1,0 +1,25 @@
+# ===== Web 框架 =====
+fastapi>=0.110
+uvicorn[standard]>=0.27
+
+# ===== 前端 =====
+streamlit>=1.32
+
+# ===== HTTP =====
+requests>=2.31
+
+# ===== 环境变量 =====
+python-dotenv>=1.0
+
+# ===== 大模型 SDK（DeepSeek 兼容 OpenAI 接口）=====
+openai>=1.30
+
+# ===== RAG：向量检索 =====
+langchain>=0.3
+langchain-community>=0.3
+langchain-openai>=0.2
+langchain-text-splitters>=0.3
+faiss-cpu>=1.8
+
+# ===== 数据处理 =====
+numpy>=1.26
