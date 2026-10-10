@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AIChat 项目学习指南</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%232C6FBB'/%3E%3Ctext x='32' y='44' font-size='36' text-anchor='middle' fill='white'%3EA%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="https://miaoda.feishu.cn/fonts/css2?family=Noto+Sans+SC:wght@400;500;700;900&display=swap">
+<style>
+:root{
+  --bg:#F6F8FB; --card:#FFFFFF; --text:#1F2937; --text2:#5B6B7C;
+  --brand:#2C6FBB; --brand-soft:#E7F0FA; --line:#E3EAF2;
+  --code-bg:#0F172A; --code-text:#E2E8F0; --accent:#D97706; --ok:#2F9E6E;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:'Noto Sans SC','PingFang SC','Microsoft YaHei',sans-serif;background:var(--bg);color:var(--text);line-height:1.75;font-size:15px}
+/* ===== 顶部目录条 ===== */
+.topbar{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.topbar-inner{max-width:920px;margin:0 auto;display:flex;align-items:center;gap:14px;padding:10px 16px}
+.brand{font-weight:900;font-size:15px;color:var(--brand);white-space:nowrap}
+.brand small{font-weight:500;color:var(--text2);font-size:11px;display:block;line-height:1.2}
+.nav{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.nav::-webkit-scrollbar{display:none}
+.nav a{font-size:12.5px;color:var(--text2);text-decoration:none;padding:5px 10px;border-radius:8px;white-space:nowrap}
+.nav a:hover{background:var(--brand-soft);color:var(--brand)}
+/* ===== 主内容 ===== */
+main{max-width:920px;margin:0 auto;padding:0 16px 80px}
+/* hero */
+.hero{background:linear-gradient(150deg,#EAF2FC 0%,#F6F8FB 70%);border-radius:20px;padding:36px 30px;margin:24px 0 12px;border:1px solid var(--line)}
+.hero .tag{display:inline-block;font-size:12px;color:var(--brand);background:#fff;border:1px solid var(--line);padding:3px 12px;border-radius:999px;font-weight:500}
+.hero h1{font-size:30px;font-weight:900;margin:14px 0 6px;letter-spacing:-.5px}
+.hero p{color:var(--text2);font-size:14.5px;max-width:640px}
+.route{display:flex;flex-wrap:wrap;gap:10px;margin-top:20px}
+.route .step{flex:1 1 200px;min-width:0;background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.route .step b{display:block;font-size:13px;color:var(--brand)}
+.route .step span{font-size:12px;color:var(--text2)}
+/* 章节 */
+.chapter{margin-top:44px;scroll-margin-top:70px}
+.ch-head{display:flex;align-items:baseline;gap:12px;border-bottom:2px solid var(--brand);padding-bottom:8px;margin-bottom:20px}
+.ch-head .no{font-size:22px;font-weight:900;color:var(--brand)}
+.ch-head h2{font-size:22px;font-weight:900;letter-spacing:-.3px}
+.ch-head .en{font-size:12px;color:var(--text2);font-weight:500}
+h3{font-size:17px;font-weight:700;margin:26px 0 10px;color:var(--text)}
+h4{font-size:14.5px;font-weight:700;margin:16px 0 8px}
+p{margin:8px 0}
+ul,ol{margin:8px 0 8px 22px}
+li{margin:4px 0}
+b.hl{color:var(--brand)}
+b.warn{color:var(--accent)}
+/* 代码 */
+pre{background:var(--code-bg);color:var(--code-text);border-radius:12px;padding:14px 16px;overflow-x:auto;font-size:12.8px;line-height:1.65;margin:10px 0;font-family:Consolas,'JetBrains Mono','Courier New',monospace}
+code{font-family:Consolas,'JetBrains Mono','Courier New',monospace;background:var(--brand-soft);color:var(--brand);padding:1px 6px;border-radius:5px;font-size:13px}
+pre code{background:none;color:inherit;padding:0}
+.cmt{color:#8CA3BE}
+/* 表格 */
+.tbl{width:100%;border-collapse:collapse;margin:12px 0;table-layout:fixed;font-size:13px}
+.tbl th{background:var(--brand-soft);color:var(--brand);text-align:left;padding:8px 10px;border:1px solid var(--line);font-weight:700}
+.tbl td{padding:8px 10px;border:1px solid var(--line);color:var(--text);vertical-align:top;word-break:break-word}
+.tbl tr:nth-child(even) td{background:#FAFCFE}
+/* 提示块 */
+.note{border-left:4px solid var(--brand);background:var(--brand-soft);border-radius:0 10px 10px 0;padding:10px 14px;margin:12px 0;font-size:13.5px}
+.note.warn{border-color:var(--accent);background:#FDF3E7}
+.note.ok{border-color:var(--ok);background:#EAF6F0}
+.practice{background:#FDF8EF;border:1px solid #F0E3C8;border-radius:12px;padding:14px 16px;margin:14px 0}
+.practice b{color:#9A6B00;font-size:13px}
+.practice ul{margin:6px 0 0 20px;font-size:13.5px}
+/* 流程图条 */
+.flow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:12px 0}
+.flow .node{font-size:12.5px;padding:8px 12px;background:#fff;border:1px solid var(--line);border-radius:10px;text-align:center;min-width:88px;flex:1 1 100px}
+.flow .node b{display:block;font-size:12.5px;color:var(--brand)}
+.flow .node span{font-size:11px;color:var(--text2)}
+.flow .arr{color:var(--brand);font-size:14px;flex:0 0 auto}
+/* 页脚 */
+.footer{margin-top:60px;border-top:1px solid var(--line);padding-top:16px;color:var(--text2);font-size:12.5px;text-align:center}
+/* 响应式 */
+@media(max-width:640px){
+  body{font-size:15.5px;line-height:1.8}
+  pre{font-size:13.2px;line-height:1.7}
+  .hero{padding:22px 16px}
+  .hero h1{font-size:24px}
+  .ch-head h2{font-size:18px}
+  .topbar-inner{padding:6px 8px}
+  .brand{font-size:13px}
+  .nav a{font-size:13px;padding:9px 11px}
+  .tbl td,.tbl th{font-size:13.5px}
+  .practice,.note{padding:12px 12px}
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">AIChat 学习指南<small>带知识库的 AI 聊天助手</small></div>
+    <nav class="nav">
+      <a href="#ch1">① Python</a>
+      <a href="#ch2">② FastAPI</a>
+      <a href="#ch3">③ 大模型</a>
+      <a href="#ch4">④ RAG</a>
+      <a href="#ch5">⑤ Streamlit</a>
+      <a href="#ch6">⑥ SQLite</a>
+      <a href="#ch7">⑦ 工程</a>
+      <a href="#ch8">⑧ 自测</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+
+  <!-- ========== 引言 ========== -->
+  <section class="hero">
+    <span class="tag">零基础学习路线 · 对照真实代码</span>
+    <h1>从零弄懂你的 AI 聊天助手</h1>
+    <p>这份指南按「知识地图」分 8 章，每一章都直接对照项目代码讲。主线是 ①Python → ②FastAPI → ③大模型 → ④RAG，跑通「提问→流式回答」和「知识库」两条闭环后，其余章节自然就通了。</p>
+    <div class="route">
+      <div class="step"><b>阶段一 · 跑通主线</b><span>第 1–4 章：看懂代码在干什么、数据怎么流动</span></div>
+      <div class="step"><b>阶段二 · 补齐全貌</b><span>第 5–6 章：界面、存储，理解两个闭环</span></div>
+      <div class="step"><b>阶段三 · 动手实践</b><span>第 7–8 章：工具链 + 自测题，开始改代码</span></div>
+    </div>
+  </section>
+
+  <!-- ========== 第 1 章 ========== -->
+  <section class="chapter" id="ch1">
+    <div class="ch-head"><span class="no">01</span><h2>Python 基础</h2><span class="en">地基 · 重点是生成器 yield</span></div>
+
+    <h3>1.1 你需要的最小语法集</h3>
+    <p>这个项目只有两个 Python 文件，你不需要成为 Python 高手，先认识这 5 样东西就够了：</p>
+    <table class="tbl"><colgroup><col style="width:20%"><col style="width:40%"><col style="width:40%"></colgroup>
+      <tr><th>概念</th><th>是什么</th><th>项目里的例子</th></tr>
+      <tr><td><b>函数</b></td><td>一段可复用的代码，用 <code>def</code> 定义</td><td><code>def save_message(...)</code></td></tr>
+      <tr><td><b>类</b></td><td>把数据和操作打包的模板，用 <code>class</code> 定义</td><td><code>class LocalEmbeddings</code></td></tr>
+      <tr><td><b>模块导入</b></td><td><code>import</code> 引入别人写好的功能</td><td><code>from fastapi import FastAPI</code></td></tr>
+      <tr><td><b>类型标注</b></td><td>写参数/返回值类型，方便自己和 IDE 理解</td><td><code>def add_document(title: str, content: str) -&gt; int</code></td></tr>
+      <tr><td><b>异常</b></td><td><code>try/except</code> 捕获错误，不崩程序</td><td>chat 接口的 5 类错误处理</td></tr>
+    </table>
+
+    <h3>1.2 重点：生成器 yield —— 流式输出的地基</h3>
+    <p>这是全项目最关键的语法点。<b class="hl">打字机效果、流式回复，全靠它。</b>先看普通函数和生成器的区别：</p>
+    <pre><span class="cmt"># 普通函数：一次性算完，把完整结果 return 给你</span>
+def normal():
+    result = []
+    for i in range(3):
+        result.append(i)
+    return result          <span class="cmt"># 你拿到的是一整个列表</span>
+
+<span class="cmt"># 生成器：用 yield 代替 return，一次吐一个，吐完暂停，下次继续</span>
+def generator():
+    for i in range(3):
+        yield i             <span class="cmt"># 吐一个就暂停，等别人来要下一个</span>
+</pre>
+    <p><b>yield 的本质</b>：函数执行到 <code>yield</code> 时<u>暂停并返回值</u>，下次被调用时从暂停处继续。所以生成器像一条「流水线」——生产者和消费者可以同时工作，不用等全部生产完。</p>
+
+    <div class="note ok"><b>为什么要这样？</b> 大模型生成一段回答可能要 10 秒。如果等它全部生成完再一次性给你，你要干等 10 秒；用生成器，模型吐出一个字就立刻推给你一个字，你看到的是「边生成边打字」——这就是打字机效果。</div>
+
+    <h4>项目里的第一处：后端逐字推送（backend.py）</h4>
+    <pre><span class="cmt"># backend.py · /api/chat 接口内部 —— 节选</span>
+def generate():                        <span class="cmt"># 这是一个生成器函数</span>
+    full_reply = ""
+    stream = client.chat.completions.create(
+        model="deepseek-v4-pro",
+        messages=full_messages,
+        stream=True,                   <span class="cmt"># 关键：让 DeepSeek 也"流式"返回</span>
+    )
+    for chunk in stream:               <span class="cmt"># 每来一小块</span>
+        delta = chunk.choices[0].delta
+        if delta.content:
+            full_reply += delta.content
+            yield delta.content        <span class="cmt"># ① yield：把这几个字立刻推给前端</span>
+    save_message(req.session_id, "assistant", full_reply)  <span class="cmt"># 流结束了再落库</span>
+
+<span class="cmt"># ② StreamingResponse 把生成器包成 HTTP 流式响应</span>
+return StreamingResponse(generate(), media_type="text/event-stream")</pre>
+
+    <h4>项目里的第二处：前端逐字接收（frontend.py）</h4>
+    <pre><span class="cmt"># frontend.py · stream_ai_reply —— 节选</span>
+def stream_ai_reply(session_id: str, message: str):
+    res = requests.post(BACKEND_CHAT_URL, json={...}, stream=True)
+    for chunk in res.iter_content(decode_unicode=True):  <span class="cmt"># 来一块收一块</span>
+        if chunk:
+            yield chunk              <span class="cmt"># 前端也是个生成器，转发给 st.write_stream</span>
+
+<span class="cmt"># st.write_stream 吃一个生成器，自动实现打字机效果</span>
+ai_reply = st.write_stream(stream_ai_reply(session_id, user_input))</pre>
+
+    <div class="note"><b>理解闭环</b>：后端生成器 <code>yield</code> 逐字吐 → <code>StreamingResponse</code> 转成网络流 → 前端 <code>iter_content</code> 逐块收 → 前端生成器再 <code>yield</code> → <code>st.write_stream</code> 逐字显示。整条链都是「生产一个、消费一个」，没有任何一方需要等全部。</div>
+
+    <h3>1.3 异常处理：错误要分类，不能一锅端</h3>
+    <p>调用外部大模型，什么错误都可能发生（网络断了、密钥错了、请求太频繁）。后端把错误<b class="hl">分成 5 类</b>，每类给用户不同的提示：</p>
+    <pre><span class="cmt"># backend.py · generate() 内部 —— 节选</span>
+try:
+    stream = client.chat.completions.create(...)
+    ...
+except APITimeoutError:      yield "\n\n[错误] 模型响应超时，请稍后重试"
+except APIConnectionError:   yield "\n\n[错误] 连不上 DeepSeek 服务，请稍后重试"
+except RateLimitError:       yield "\n\n[错误] 请求太频繁，请稍等几秒再试"
+except AuthenticationError:  yield "\n\n[错误] 服务配置有误，请联系管理员"
+except APIStatusError:       yield "\n\n[错误] DeepSeek 服务返回错误，请稍后重试"
+except Exception:            yield "\n\n[错误] 生成过程中出现异常，请稍后重试"</pre>
+    <p>两个细节：流开始前的错误用 <code>HTTPException</code>（能返回 4xx 状态码）；<b class="warn">流开始后的错误只能往流里塞文字</b>（状态码已经是 200，没法改了）。这就是为什么错误提示以 <code>[错误]</code> 开头——前端看到这个标记就不入库。</p>
+
+    <h3>1.4 装饰器：@ 符号是干什么的</h3>
+    <p><code>@app.post("/api/chat")</code> 的意思是：<b class="hl">把下面这个函数"注册"给 FastAPI，当有人 POST /api/chat 时，就调用这个函数</b>。装饰器就是"给函数包装一层功能"的语法糖，你现在只需要知道：看到 <code>@app.xxx</code> = 这是后端的一个接口。</p>
+
+    <h3>1.5 标准库速览</h3>
+    <table class="tbl"><colgroup><col style="width:22%"><col style="width:44%"><col style="width:34%"></colgroup>
+      <tr><th>模块</th><th>干什么</th><th>项目用法</th></tr>
+      <tr><td><code>os</code></td><td>操作系统：读环境变量、拼文件路径</td><td><code>os.environ.get("dp_api_key")</code></td></tr>
+      <tr><td><code>logging</code></td><td>打日志（比 print 专业，带时间/级别）</td><td><code>logger.info(...)</code></td></tr>
+      <tr><td><code>sqlite3</code></td><td>内置数据库</td><td>聊天记录持久化</td></tr>
+      <tr><td><code>uuid</code></td><td>生成唯一 ID</td><td>会话 ID、请求 ID</td></tr>
+      <tr><td><code>time</code></td><td>计时</td><td>算接口耗时</td></tr>
+    </table>
+
+    <div class="practice"><b>练习</b>
+      <ul>
+        <li>写一个生成器，依次吐出 "你" "好" "世" "界" 四个字，用 <code>for</code> 循环打印出来，感受每次取一个。</li>
+        <li>在 <code>frontend.py</code> 里找到 <code>st.write_stream</code>，把 <code>stream_ai_reply</code> 换成 <code>stream_ai_reply(session_id, user_input, slow=True)</code>（还没实现也没关系，先想象它逐字变慢，界面会怎样）。</li>
+        <li>试着给 <code>generate()</code> 加一个 <code>except KeyboardInterrupt</code> 分支，想想有没有必要（提示：流到一半用户关掉页面会怎样）。</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ========== 第 2 章 ========== -->
+  <section class="chapter" id="ch2">
+    <div class="ch-head"><span class="no">02</span><h2>Web 后端 FastAPI</h2><span class="en">接口是怎么"接"出来的</span></div>
+
+    <h3>2.1 先懂 HTTP：请求和响应长什么样</h3>
+    <p>前后端通信走 HTTP，你只需要懂 3 件事：</p>
+    <ul>
+      <li><b>方法</b>：<code>GET</code> 拿数据、<code>POST</code> 提交数据、<code>DELETE</code> 删数据。项目的 6 个接口都用到了。</li>
+      <li><b>状态码</b>：<code>200</code> 成功、<code>400</code> 参数错、<code>404</code> 找不到、<code>500</code> 服务器内部错。前端靠状态码判断成败。</li>
+      <li><b>JSON</b>：前后端传数据的通用格式，形如 <code>{"session_id": "abc", "message": "你好"}</code>。</li>
+    </ul>
+
+    <h3>2.2 接口一览：这个项目就是 6 个 API</h3>
+    <table class="tbl"><colgroup><col style="width:34%"><col style="width:30%"><col style="width:36%"></colgroup>
+      <tr><th>接口</th><th>干什么</th><th>触发时机</th></tr>
+      <tr><td><code>POST /api/chat</code></td><td>发消息，<b>流式</b>返回 AI 回复</td><td>用户每次提问</td></tr>
+      <tr><td><code>GET /api/history/{id}</code></td><td>查某个会话的历史</td><td>打开/切换会话时</td></tr>
+      <tr><td><code>GET /api/sessions</code></td><td>列出所有会话（带标题）</td><td>页面加载侧边栏时</td></tr>
+      <tr><td><code>DELETE /api/sessions/{id}</code></td><td>删除一个会话</td><td>点侧边栏删除按钮</td></tr>
+      <tr><td><code>POST /api/knowledge/upload</code></td><td>上传文档进知识库</td><td>点"上传到知识库"</td></tr>
+      <tr><td><code>GET /api/knowledge</code></td><td>列出已上传文档</td><td>展开知识库面板时</td></tr>
+    </table>
+
+    <h3>2.3 Pydantic：参数自动校验</h3>
+    <p>后端收数据不能直接信。用 Pydantic 定义"请求长什么样"，FastAPI 自动帮你校验：</p>
+    <pre><span class="cmt"># backend.py —— 定义请求契约</span>
+class ChatRequest(BaseModel):
+    session_id: str
+    message: str
+
+<span class="cmt"># 接口直接声明参数类型，缺字段/类型错会自动返回 422</span>
+@app.post("/api/chat")
+async def chat(req: ChatRequest, request: Request):
+    ...</pre>
+
+    <h3>2.4 中间件：每个请求先"过一道"</h3>
+    <p>中间件在请求进入接口<u>之前</u>和<u>之后</u>各执行一段代码。项目用它给每个请求分配短 ID 并记日志：</p>
+    <pre><span class="cmt"># backend.py · log_requests —— 节选</span>
+@app.middleware("http")
+async def log_requests(request, call_next):
+    request_id = uuid.uuid4().hex[:8]      <span class="cmt"># 给这个请求一个 8 位短 ID</span>
+    request.state.request_id = request_id  <span class="cmt"># 存起来，接口内部能取</span>
+    started = time.perf_counter()
+    response = await call_next(request)    <span class="cmt"># 放行，执行真正的接口</span>
+    logger.info("[%s] %s %s -&gt; %d 耗时=%.0fms", ...)  <span class="cmt"># 记日志</span>
+    response.headers["X-Request-ID"] = request_id
+    return response</pre>
+    <p>作用：出问题时，终端日志里的 <code>[a1b2c3d4]</code> 能帮你定位是哪一次请求。</p>
+
+    <h3>2.5 重点：SSE 流式响应 —— 接口怎么"边生成边返回"</h3>
+    <p>普通接口：算完 → 一次性返回。流式接口：算一点 → 推一点。FastAPI 的实现方式是 <code>StreamingResponse</code>：</p>
+    <pre><span class="cmt"># backend.py /api/chat 结尾</span>
+return StreamingResponse(generate(), media_type="text/event-stream")
+<span class="cmt"># ① generate() 是生成器：yield 一次 = 推一块给前端
+# ② text/event-stream 是 SSE（Server-Sent Events）标准格式
+# ③ 前端 requests 拿到的是"流"，iter_content 逐块读</span></pre>
+    <div class="note warn"><b>关键限制</b>：流式接口一旦开始推送，<u>状态码就不能再改了</u>（永远是 200）。所以项目把错误分成两段处理：流开始前的错误返回 4xx；流开始后的错误在流里塞 <code>[错误]...</code> 文字。看懂这一点，就理解了 <code>frontend.py</code> 里 <code>if "[错误]" not in ai_reply</code> 这行代码为什么存在。</div>
+
+    <h3>2.6 全局异常处理：最后一道兜底网</h3>
+    <pre><span class="cmt"># backend.py —— 任何没被接住的异常都到这里</span>
+@app.exception_handler(Exception)
+async def safety_net(request, exc):
+    traceback.print_exc()   <span class="cmt"># 完整堆栈打后端终端（给开发者看）</span>
+    return JSONResponse(
+        status_code=500,
+        content={"detail": {"message": "服务器内部错误，请稍后重试"}},
+    )   <span class="cmt"># 前端只收到一句干净的 JSON（给用户看）</span></pre>
+
+    <div class="practice"><b>练习</b>
+      <ul>
+        <li>用浏览器直接访问 <code>http://127.0.0.1:8000/api/sessions</code>（后端运行时），看看返回的 JSON 长什么样。</li>
+        <li>给 <code>GET /api/knowledge</code> 加一个查询参数 <code>?limit=5</code>，只返回最近 5 篇文档（提示：函数签名加 <code>limit: int = 5</code>）。</li>
+        <li>想一想：为什么 <code>/api/chat</code> 不能用普通 JSON 返回？如果改成非流式，用户体验会差在哪？</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ========== 第 3 章 ========== -->
+  <section class="chapter" id="ch3">
+    <div class="ch-head"><span class="no">03</span><h2>大模型与 OpenAI SDK</h2><span class="en">AI 是怎么被"调"出来的</span></div>
+
+    <h3>3.1 大模型 API 的本质：发文字过去，收文字回来</h3>
+    <p>你的代码并不"内置"大模型，而是调用 DeepSeek 的在线 API。流程是：<b class="hl">把对话历史打包发过去 → 大模型生成回复 → 收回来</b>。OpenAI 的 SDK 只是帮你做 HTTP 请求的封装。</p>
+    <pre><span class="cmt"># backend.py —— 客户端初始化（整个项目只有这里需要密钥）</span>
+from openai import OpenAI
+client = OpenAI(
+    api_key=os.environ.get("dp_api_key"),   <span class="cmt"># 密钥从 .env 读，绝不写死在代码里</span>
+    base_url="https://api.deepseek.com",    <span class="cmt"># 指向 DeepSeek 的接口地址</span>
+)</pre>
+
+    <h3>3.2 messages 结构：AI 看到的是"一摞消息"</h3>
+    <p>发给大模型的不是一句话，而是一整个消息列表。每个消息有 <code>role</code>（角色）和 <code>content</code>（内容）：</p>
+    <table class="tbl"><colgroup><col style="width:22%"><col style="width:78%"></colgroup>
+      <tr><th>角色</th><th>作用</th></tr>
+      <tr><td><code>system</code></td><td>给 AI 定人设和规则（<u>不显示给用户</u>）。项目里 = 数学助手 + RAG 资料</td></tr>
+      <tr><td><code>user</code></td><td>用户说的话</td></tr>
+      <tr><td><code>assistant</code></td><td>AI 说过的话（上下文记忆靠它）</td></tr>
+    </table>
+    <pre><span class="cmt"># backend.py /api/chat —— 组装发给 DeepSeek 的完整消息</span>
+system_with_rag = build_rag_prompt(req.message, request_id)   <span class="cmt"># 第4章重点</span>
+full_messages = [{"role": "system", "content": system_with_rag}] + history
+<span class="cmt"># 形如：[{system: 人设+资料}, {user: 你好}, {assistant: 你好！}, {user: 1+1=?}]</span></pre>
+    <p>注意：<code>history</code> 是从数据库读出来的历史，<b class="hl">AI 的"记忆"就是这么实现的</b>——每次把全部历史重新发一遍。</p>
+
+    <h3>3.3 stream=True：让回复"一块一块"来</h3>
+    <pre><span class="cmt"># 非流式（stream=False）：等全部生成完，一次性拿结果</span>
+resp = client.chat.completions.create(model=..., messages=..., stream=False)
+reply = resp.choices[0].message.content
+
+<span class="cmt"># 流式（stream=True）：返回迭代器，吐一块拿一块</span>
+stream = client.chat.completions.create(model=..., messages=..., stream=True)
+for chunk in stream:
+    delta = chunk.choices[0].delta
+    if delta.content:
+        print(delta.content)   <span class="cmt"># 每块只有几个字</span></pre>
+    <div class="note"><b>为什么叫"打字机效果"</b>：大模型本质上是"预测下一个字"，流式就是把每个字生成出来就立刻给你。配合第 1 章的生成器，前后端整条链都流式，用户看到的就是逐字输出。</div>
+
+    <h3>3.4 错误分类：5 类错误，5 句人话</h3>
+    <p>见第 1.3 节。这里补充一个细节：<code>AuthenticationError</code> 分支里 <b class="warn">故意不打堆栈</b>，只记一句日志——因为堆栈里可能带请求头（含密钥）。这是安全意识，记住它。</p>
+
+    <div class="practice"><b>练习</b>
+      <ul>
+        <li>把 <code>deepseek-v4-pro</code> 改成 <code>deepseek-chat</code> 或其他可用模型名，重启后端试试还能不能跑（了解模型名怎么配置）。</li>
+        <li>如果去掉 system 消息只发历史，AI 会变成什么样？（提示：人设丢了，RAG 资料也没了）</li>
+        <li>为什么每次提问都把<b>全部历史</b>发给模型？如果历史有 1 万条会怎样？（提示：成本、上下文长度限制）</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ========== 第 4 章 ========== -->
+  <section class="chapter" id="ch4">
+    <div class="ch-head"><span class="no">04</span><h2>RAG 知识库</h2><span class="en">项目的灵魂 · 检索增强生成</span></div>
+
+    <h3>4.1 它解决什么问题</h3>
+    <p>大模型的"知识"是训练时学到的，<b class="hl">截止到某个时间点</b>，而且不包含你的私有资料（员工手册、课程笔记……）。RAG 的思路一句话：<b class="hl">提问时先从你的资料里检索出最相关的几段，连同问题一起交给 AI，让它"开卷"回答。</b></p>
+    <div class="flow">
+      <div class="node"><b>资料</b><span>你的文档</span></div><div class="arr">→</div>
+      <div class="node"><b>切块+向量化</b><span>存进向量库</span></div><div class="arr">→</div>
+      <div class="node"><b>提问时检索</b><span>找出最像的 3 段</span></div><div class="arr">→</div>
+      <div class="node"><b>拼进提示词</b><span>资料+问题</span></div><div class="arr">→</div>
+      <div class="node"><b>AI 回答</b><span>基于资料作答</span></div>
+    </div>
+
+    <h3>4.2 基础概念：embedding（词向量）</h3>
+    <p>电脑不懂文字，但懂数字。<b class="hl">embedding 模型能把一句话变成一个数字列表（向量）</b>，并且：<b>语义相近的句子，向量也相近</b>。比如「如何请假」和「请假流程是什么」的向量距离很近，和「今天天气」的向量很远。</p>
+    <pre><span class="cmt"># backend.py · LocalEmbeddings —— 用本地模型做向量化（免费、不依赖 API）</span>
+class LocalEmbeddings(Embeddings):
+    def __init__(self, model_name):
+        self._model = SentenceTransformer(model_name)   <span class="cmt"># bge-small-zh-v1.5</span>
+
+    def embed_documents(self, texts):   <span class="cmt"># 上传文档时：批量向量化</span>
+        return self._model.encode(texts, normalize_embeddings=True).tolist()
+
+    def embed_query(self, text):        <span class="cmt"># 提问时：单句向量化</span>
+        return self._model.encode(text, normalize_embeddings=True).tolist()</pre>
+    <p>「向量」先不纠结数学，你只需要记住：<b class="hl">文本 → 向量 → 比距离</b>，这个项目用的是 <code>bge-small-zh-v1.5</code>，约 100MB，<u>第一次用到才下载</u>（懒加载），下载走国内镜像 <code>hf-mirror.com</code>。</p>
+
+    <h3>4.3 入库：上传文档后发生了什么</h3>
+    <p>入口 <code>POST /api/knowledge/upload</code> → <code>add_document(title, content)</code>，4 步：</p>
+    <div class="flow">
+      <div class="node"><b>① 切块</b><span>500字/块，重叠50</span></div><div class="arr">→</div>
+      <div class="node"><b>② 向量化</b><span>本地模型</span></div><div class="arr">→</div>
+      <div class="node"><b>③ 入索引</b><span>FAISS 存向量+原文</span></div><div class="arr">→</div>
+      <div class="node"><b>④ 落盘</b><span>faiss_store/ + 元数据</span></div>
+    </div>
+    <pre><span class="cmt"># backend.py · add_document —— 节选</span>
+<span class="cmt"># ① 切块：长文档切成小块，块间重叠 50 字防意思被切断</span>
+text_splitter = RecursiveCharacterTextSplitter(
+    chunk_size=500, chunk_overlap=50,
+    separators=["\n\n", "\n", "。", "！", "？", " ", ""],  <span class="cmt"># 按段落→句子→标点逐级切</span>
+)
+chunks = text_splitter.split_text(content)
+
+<span class="cmt"># ②③ 转成 Document 对象（带标题元数据）→ 加入 FAISS 向量库</span>
+docs = [Document(page_content=chunk, metadata={"title": title}) for chunk in chunks]
+get_vector_store().add_documents(docs)   <span class="cmt"># 内部自动向量化+建索引</span>
+
+<span class="cmt"># ④ 落盘 + 元数据入库</span>
+save_vector_store()                      <span class="cmt"># 存到 faiss_store/ 目录</span>
+conn.execute("INSERT INTO knowledge_docs (title, chunk_count) VALUES (?, ?)", ...)</pre>
+    <p><b>为什么切块？</b> 一次发给模型的文字量有限；而且文档太长，检索"整篇"没有意义——切成小块后，检索能精确到"哪一段最相关"。</p>
+
+    <h3>4.4 提问：检索增强怎么发生</h3>
+    <p>入口 <code>POST /api/chat</code> → <code>build_rag_prompt(message)</code>，也是 4 步：</p>
+    <div class="flow">
+      <div class="node"><b>① 问题向量化</b><span>只向量化最新这句</span></div><div class="arr">→</div>
+      <div class="node"><b>② 相似度检索</b><span>FAISS 找 TOP 3</span></div><div class="arr">→</div>
+      <div class="node"><b>③ 拼 system prompt</b><span>资料+防编造指令</span></div><div class="arr">→</div>
+      <div class="node"><b>④ 发 DeepSeek</b><span>基于资料生成</span></div>
+    </div>
+    <pre><span class="cmt"># backend.py · retrieve_relevant —— 节选</span>
+def retrieve_relevant(query, request_id="-"):
+    store = get_vector_store()
+    if store.index.ntotal == 0:      <span class="cmt"># 向量库是空的：跳过检索，直接返回空</span>
+        return []
+    docs = store.similarity_search(query, k=RAG_TOP_K)   <span class="cmt"># RAG_TOP_K = 3</span>
+    return [doc.page_content for doc in docs]            <span class="cmt"># 取回 TOP3 的原文</span></pre>
+    <pre><span class="cmt"># backend.py · build_rag_prompt —— 把资料拼进提示词</span>
+context = "\n\n---\n\n".join(f"资料片段 {i+1}：\n{c}" for i, c in enumerate(chunks))
+return (f"{SYSTEM_PROMPT}\n\n"
+        f"以下是可能相关的参考资料，请根据资料回答用户问题。"
+        f"如果资料里没有答案，就如实说不知道，不要编造。\n\n"
+        f"===== 参考资料 =====\n{context}\n===== 参考资料结束 =====")</pre>
+    <p><b>只向量化"最新一句问题"</b>（不是整个历史）——因为检索要找的是"跟此刻问题相关的资料"，历史里的旧问题会干扰。这是代码注释里特意写明的设计决策。</p>
+
+    <h3>4.5 三个值得记住的设计细节</h3>
+    <table class="tbl"><colgroup><col style="width:26%"><col style="width:74%"></colgroup>
+      <tr><th>设计</th><th>为什么</th></tr>
+      <tr><td>向量库为空时跳过检索并打日志</td><td>避免"静默降级"：模型拿不到资料却照常作答，出问题都不知道。记日志 = 排查的第一现场</td></tr>
+      <tr><td>懒加载（get_embeddings / get_vector_store）</td><td>不传文档就不用加载 100MB 模型，后端启动快</td></tr>
+      <tr><td>旧索引损坏自动删除重建</td><td>换了 embedding 模型后向量维度会变，旧索引必然加载失败，删掉重建最省事</td></tr>
+      <tr><td>prompt 要求"资料里没答案就如实说不知道"</td><td>防幻觉：模型拿不到资料时会编造。明确指令是 RAG 降低编造的关键</td></tr>
+    </table>
+
+    <div class="practice"><b>练习</b>
+      <ul>
+        <li>上传一篇文档后，在知识库面板看到"切成 N 块"。想想 N 和文档字数、chunk_size=500 的关系。</li>
+        <li>把 <code>RAG_TOP_K</code> 改成 1，问一个需要多段资料的问题，对比回答质量变化。</li>
+        <li>不传任何文档直接提问，观察后端日志里的警告"向量库为空"，再对比上传文档后提问，体会 RAG 的差别。</li>
+        <li>想一想：如果用户上传的是 PDF/Word，代码能处理吗？（提示：目前 upload 接口收的是 <code>title</code> + <code>content</code> 文本，文件解析还没做——这是一个可以扩展的方向）</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ========== 第 5 章 ========== -->
+  <section class="chapter" id="ch5">
+    <div class="ch-head"><span class="no">05</span><h2>Streamlit 前端</h2><span class="en">界面是怎么"画"出来的</span></div>
+
+    <h3>5.1 最重要的心智模型：整页脚本每次交互都重跑</h3>
+    <p>Streamlit 和传统网页不同：<b class="hl">你每点一次按钮/发一条消息，整个 <code>frontend.py</code> 都会从头到尾重新执行一遍</b>。如果每次都重新执行，状态不就丢了吗？于是有了 <code>st.session_state</code>——<b>跨重跑保存数据的"内存抽屉"</b>。</p>
+    <pre><span class="cmt"># frontend.py —— 会话 ID 的保存与恢复</span>
+if "session_id" not in st.session_state:        <span class="cmt"># 第一次跑（抽屉是空的）</span>
+    url_sid = st.query_params.get("session_id") <span class="cmt"># 优先从网址参数恢复</span>
+    st.session_state.session_id = url_sid or str(uuid.uuid4())
+    st.query_params.session_id = st.session_state.session_id  <span class="cmt"># 写回网址，刷新不丢</span></pre>
+    <p>这套组合拳的效果：刷新页面、切走再切回，当前会话都不丢——因为会话 ID 存在 <code>session_state</code> 里，还同步写进了 URL。</p>
+
+    <h3>5.2 组件速览</h3>
+    <table class="tbl"><colgroup><col style="width:30%"><col style="width:70%"></colgroup>
+      <tr><th>组件</th><th>用途</th></tr>
+      <tr><td><code>st.sidebar</code></td><td>侧边栏容器（会话列表、知识库面板）</td></tr>
+      <tr><td><code>st.chat_message(role)</code></td><td>聊天气泡，按角色区分用户/AI</td></tr>
+      <tr><td><code>st.write_stream(gen)</code></td><td>吃生成器，自动打字机效果，返回完整文本</td></tr>
+      <tr><td><code>st.query_params</code></td><td>读写网址参数（会话 ID 持久化）</td></tr>
+      <tr><td><code>st.rerun()</code></td><td>主动重跑页面（新建会话后刷新界面）</td></tr>
+      <tr><td><code>st.chat_input</code></td><td>底部聊天输入框</td></tr>
+    </table>
+
+    <h3>5.3 一次聊天的前端全流程</h3>
+    <pre><span class="cmt"># frontend.py · 主区域 —— 节选</span>
+<span class="cmt"># ① 加载历史（首次或切换会话时）</span>
+if "messages" not in st.session_state or st.session_state.messages is None:
+    res = requests.get(f"{BACKEND_HISTORY_URL}/{sid}", timeout=5)
+    st.session_state.messages = res.json()["messages"]
+
+<span class="cmt"># ② 渲染历史气泡</span>
+for msg in st.session_state.messages:
+    with st.chat_message(msg["role"]):
+        st.markdown(msg["content"])
+
+<span class="cmt"># ③ 用户输入 → 立刻显示 → 流式回复 → 归档</span>
+user_input = st.chat_input("请输入你的问题")
+if user_input:
+    with st.chat_message("user"):
+        st.markdown(user_input)
+    st.session_state.messages.append({"role": "user", "content": user_input})
+
+    with st.chat_message("assistant"):
+        ai_reply = st.write_stream(stream_ai_reply(sid, user_input))  <span class="cmt"># 打字机</span>
+
+    if "[错误]" not in ai_reply:   <span class="cmt"># 流中出错的不归档（第2.5节讲过）</span>
+        st.session_state.messages.append({"role": "assistant", "content": ai_reply})</pre>
+
+    <h3>5.4 侧边栏：会话管理 + 知识库面板</h3>
+    <p>侧边栏做了三件事：<code>+ 新建会话</code>（生成新 UUID 并清空消息缓存）、会话列表（每条 = 标题按钮 + 删除按钮，从 <code>GET /api/sessions</code> 取）、知识库面板（标题/内容输入框 → <code>POST /api/knowledge/upload</code>）。</p>
+    <div class="note"><b>切换会话的小技巧</b>：<code>switch_session()</code> 把 <code>st.session_state.messages = None</code>（标记"需要重新加载"），下次重跑时 5.3 的①就会自动从后端拉新会话的历史——用 <code>None</code> 当"脏标记"。</div>
+
+    <div class="practice"><b>练习</b>
+      <ul>
+        <li>在侧边栏加一个"清空所有会话"按钮（提示：需要后端加一个批量删除接口，或者循环调 DELETE）。</li>
+        <li>把 <code>st.write_stream</code> 换回普通的 <code>st.markdown</code>（先攒完整回复再显示），体验打字机消失的差别。</li>
+        <li>观察刷新页面后会话还在——用 <code>st.query_params</code> 解释为什么。</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ========== 第 6 章 ========== -->
+  <section class="chapter" id="ch6">
+    <div class="ch-head"><span class="no">06</span><h2>SQLite 数据库</h2><span class="en">状态是怎么"存"下来的</span></div>
+
+    <h3>6.1 为什么用 SQLite</h3>
+    <p>项目需要保存聊天记录，但不想装 MySQL 这种重型数据库。<b class="hl">SQLite 就是"一个文件当数据库"</b>——<code>chat.db</code> 就是个普通文件，跟着项目走，重启不丢，零配置。</p>
+
+    <h3>6.2 表结构</h3>
+    <pre><span class="cmt"># backend.py · 两张表 —— 节选</span>
+CREATE TABLE IF NOT EXISTS messages (          <span class="cmt"># 聊天记录</span>
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id  TEXT NOT NULL,                  <span class="cmt"># 属于哪个会话</span>
+    role        TEXT NOT NULL,                  <span class="cmt"># user / assistant</span>
+    content     TEXT NOT NULL,                  <span class="cmt"># 消息内容</span>
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS knowledge_docs (    <span class="cmt"># 已上传文档的清单</span>
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    title       TEXT NOT NULL, chunk_count INTEGER NOT NULL, created_at TIMESTAMP ...
+);</pre>
+
+    <h3>6.3 操作模式 + 防注入</h3>
+    <p>每个操作都是四步：<b class="hl">连接 → 执行 SQL → commit → 关闭</b>。注意参数一律用 <code>?</code> 占位符：</p>
+    <pre><span class="cmt"># backend.py · save_message —— 节选</span>
+conn = sqlite3.connect(DB_PATH)
+conn.execute(
+    "INSERT INTO messages (session_id, role, content) VALUES (?, ?, ?)",
+    (session_id, role, content),   <span class="cmt"># 值只当数据用，不会被当成 SQL 执行</span>
+)
+conn.commit()   <span class="cmt"># 不 commit，进程退出数据就没了</span>
+conn.close()</pre>
+    <div class="note warn"><b>为什么不能拼字符串？</b> 如果用 <code>f"INSERT ... VALUES ('{content}')"</code>，用户输入一句 <code>'); DROP TABLE messages;--</code> 就能删掉整张表（SQL 注入）。<code>?</code> 占位符从根源上杜绝。</div>
+
+    <h3>6.4 一个进阶技巧：窗口函数</h3>
+    <p>侧边栏要显示"每个会话的第一句话当标题"。这需要：每个 session_id 取第一条 user 消息。用窗口函数 <code>ROW_NUMBER()</code> 实现：</p>
+    <pre><span class="cmt"># backend.py · list_sessions —— 节选</span>
+SELECT session_id, content, last_time FROM (
+    SELECT session_id, content,
+        ROW_NUMBER() OVER (PARTITION BY session_id ORDER BY id) AS rn,  <span class="cmt"># 会话内排序编号</span>
+        MAX(created_at) OVER (PARTITION BY session_id) AS last_time
+    FROM messages WHERE role = 'user'
+)
+WHERE rn = 1          <span class="cmt"># 只要每个会话的第 1 条</span>
+ORDER BY last_time DESC</pre>
+    <p>现在看不懂没关系，先记住"窗口函数 = 在分组内做编号/统计"，用到了再查。</p>
+
+    <div class="practice"><b>练习</b>
+      <ul>
+        <li>后端运行时，用命令行打开 chat.db：<code>sqlite3 chat.db</code>，执行 <code>.schema</code> 看表结构，<code>SELECT * FROM messages;</code> 看数据。</li>
+        <li>给 <code>messages</code> 表加一个 <code>source</code> 字段（区分 RAG 回答/普通回答），会改哪些函数？</li>
+        <li>把 <code>content[:20]</code> 的标题截断逻辑从 Python 挪到 SQL（提示：<code>SUBSTR</code>），对比两种写法的优劣。</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ========== 第 7 章 ========== -->
+  <section class="chapter" id="ch7">
+    <div class="ch-head"><span class="no">07</span><h2>工程与工具</h2><span class="en">让项目可运行、可协作、可排查</span></div>
+
+    <h3>7.1 .env 与密钥管理</h3>
+    <p>密钥不该写死在代码里，也不该进 git。方案是：<code>.env</code> 文件存密钥 → <code>python-dotenv</code> 读到环境变量 → 代码从环境变量取。而且 <code>.env</code> 在 <code>.gitignore</code> 里被排除。</p>
+    <pre><span class="cmt"># .env（本地文件，不入库）</span>
+dp_api_key=sk-你的密钥
+
+<span class="cmt"># backend.py</span>
+load_dotenv()                          <span class="cmt"># 读 .env 进 os.environ</span>
+API_KEY = os.environ.get("DEEPSEEK_API_KEY") or os.environ.get("dp_api_key")</pre>
+    <div class="note warn"><b>你已经踩过的坑</b>：等号后多一个空格（<code>dp_api_key= sk-...</code>），读出来的密钥就带空格，鉴权失败。这类问题可以通过日志排查：启动时打印 <code>API_KEY[:8]</code> 看格式对不对。</div>
+
+    <h3>7.2 依赖管理</h3>
+    <p><code>requirements.txt</code> 记录所有第三方库及版本要求。别人拿到项目执行 <code>pip install -r requirements.txt</code> 就能装齐。版本写法 <code>fastapi&gt;=0.110</code> 表示"不低于此版本"。</p>
+
+    <h3>7.3 Git 工作流（你已经实操过了）</h3>
+    <p>改代码 → <code>git add .</code> → <code>git commit -m "说明"</code> → <code>git push</code>。三个要点：</p>
+    <ul>
+      <li>提交前看 <code>git status</code>，确认没有 <code>.env</code> 等敏感文件混进去</li>
+      <li>提交信息写"这次改了什么"，别写"改了一下"</li>
+      <li>被 <code>.gitignore</code> 忽略的文件不会出现在提交列表（PyCharm 里显示为特殊颜色）</li>
+    </ul>
+
+    <h3>7.4 日志与调试：出问题先看哪里</h3>
+    <table class="tbl"><colgroup><col style="width:36%"><col style="width:64%"></colgroup>
+      <tr><th>现象</th><th>去哪查</th></tr>
+      <tr><td>前端提示"连不上后端"</td><td>后端终端有没有启动？uvicorn 窗口是否还活着</td></tr>
+      <tr><td>报错"鉴权失败"</td><td>.env 密钥格式（空格？失效？）+ 后端日志 AuthenticationError</td></tr>
+      <tr><td>回答没依据</td><td>后端日志"未检索到资料"警告 → 知识库是不是空的</td></tr>
+      <tr><td>流中间断了</td><td>后端日志的 <code>[request_id]</code> 定位是哪个请求 + 异常类型</td></tr>
+    </table>
+    <div class="note"><b>调试技巧</b>：项目日志都在后端终端（带时间戳和 <code>[请求ID]</code>）。开发时可以用 <code>uvicorn backend:app --reload --port 8000</code> 启动，改代码自动重启。</div>
+
+    <div class="practice"><b>练习</b>
+      <ul>
+        <li>故意把 .env 里的密钥改错一位，重启后端，观察报错信息和前端提示，走一遍完整的排查流程。</li>
+        <li>把 <code>requirements.txt</code> 里 <code>langchain</code> 的版本固定成 <code>==0.3.0</code>，再 <code>pip install</code> 看效果。</li>
+        <li>给项目写一个 <code>start.bat</code>：双击就能先后端再前端（提示：两个 <code>start</code> 命令开两个窗口）。</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ========== 第 8 章 ========== -->
+  <section class="chapter" id="ch8">
+    <div class="ch-head"><span class="no">08</span><h2>自测题与下一步</h2><span class="en">检验你懂了没有</span></div>
+
+    <h3>8.1 基础自测（每题想清楚再翻代码）</h3>
+    <ol>
+      <li>yield 和 return 的区别是什么？项目里打字机效果靠什么实现？</li>
+      <li>为什么流式接口的错误提示以 <code>[错误]</code> 开头？</li>
+      <li>messages 里 system 角色是干嘛的？RAG 资料放在哪个角色里？</li>
+      <li>上传一篇 1500 字的文档，大概会切成几块？为什么切块后要有 50 字重叠？</li>
+      <li>RAG_TOP_K=3 意味着什么？改成 5 会怎样？</li>
+      <li>向量库为空时后端会怎样？为什么这比"模型瞎答"好？</li>
+      <li>Streamlit 每次交互都重跑脚本，状态靠什么保存？会话 ID 为什么写进 URL？</li>
+      <li>为什么 SQL 参数必须用 <code>?</code> 占位符？</li>
+      <li>删除一个会话后，前端侧边栏怎么知道要刷新？</li>
+      <li>.env 为什么不能提交到 GitHub？</li>
+    </ol>
+
+    <h3>8.2 进阶自测</h3>
+    <ol start="11">
+      <li>用户问历史问题时（比如"我上午问了什么"），RAG 检索用哪句话？为什么不用整个历史？</li>
+      <li>切换 embedding 模型后为什么必须重建向量库？</li>
+      <li>如果两个用户同时用（多线程请求），SQLite 的"连接→关闭"模式安全吗？瓶颈在哪？</li>
+      <li>流式接口中间抛异常，前端收到的是什么？为什么状态码还是 200？</li>
+      <li>怎么给知识库加"删除单篇文档"功能？需要动哪些接口、哪些表？（提示：knowledge_docs + FAISS 删除）</li>
+    </ol>
+
+    <h3>8.3 下一步动手方向</h3>
+    <div class="flow">
+      <div class="node"><b>方向 A</b><span>知识库增强：支持上传 PDF/Word、删除文档</span></div>
+      <div class="node"><b>方向 B</b><span>会话增强：重命名会话、搜索历史消息</span></div>
+      <div class="node"><b>方向 C</b><span>体验增强：显示检索到的资料来源、回答引用标注</span></div>
+      <div class="node"><b>方向 D</b><span>工程化：Docker 部署、前端密码保护</span></div>
+    </div>
+    <p>每个方向都会逼你动到「接口层 → 数据层 → 前端层」三处，正好把整条链再走一遍。改完记得 commit + push。</p>
+    <div class="note ok"><b>最后一句</b>：这项目的代码注释是比任何教程都好的学习材料——每个函数都写了"为什么这么设计"。遇到不懂的，先读注释，再带着问题查文档，最后动手改。三遍之后，这个项目就是你的了。</div>
+  </section>
+
+  <div class="footer">AIChat 项目学习指南 · 基于项目源码（backend.py / frontend.py）编写 · 配套 GitHub 仓库：github.com/F5L2K/ai-chat-rag</div>
+</main>
+</body>
+</html>
