@@ -1,6 +1,7 @@
 # ===== Web 框架 =====
 fastapi>=0.110
 uvicorn[standard]>=0.27
+python-multipart>=0.0.9
 
 # ===== 前端 =====
 streamlit>=1.32
@@ -20,6 +21,10 @@ langchain-community>=0.3
 langchain-openai>=0.2
 langchain-text-splitters>=0.3
 faiss-cpu>=1.8
+
+# ===== 文档解析 =====
+pdfplumber>=0.11
+python-docx>=1.1
 
 # ===== 数据处理 =====
 numpy>=1.26

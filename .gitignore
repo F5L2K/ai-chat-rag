@@ -20,3 +20,7 @@ ppt_share/
 content_log*.txt
 validate_log*.txt
 make_pptx*.js
+
+# 工具生成的截图与临时文件
+_shots/
+_tmp_attachment

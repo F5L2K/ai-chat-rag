@@ -86,6 +86,66 @@ def delete_session(session_id: str):
     # 否则保持当前会话不变
 
 
+# ============== 知识库：上传 / 列表 / 删除 ==============
+
+def upload_knowledge_file(uploaded) -> dict | None:
+    """把上传的文件发给后端解析入库。失败时在界面上报错并返回 None。"""
+    try:
+        res = requests.post(
+            f"{BACKEND_KNOWLEDGE_URL}/upload-file",
+            files={"file": (uploaded.name, uploaded.getvalue())},
+            timeout=300,  # 首次上传要加载 embedding 模型，给足时间
+        )
+    except (requests.ConnectionError, requests.Timeout):
+        st.error("上传失败：后端没响应或超时（首次上传要加载模型，请耐心等待）")
+        return None
+    if res.status_code != 200:
+        st.error(f"上传失败：{backend_error_message(res)}")
+        return None
+    return res.json()
+
+
+def delete_knowledge_doc(doc_id: str) -> bool:
+    """删除文档（后端会同步清掉表与向量库）。"""
+    try:
+        res = requests.delete(f"{BACKEND_KNOWLEDGE_URL}/{doc_id}", timeout=30)
+    except (requests.ConnectionError, requests.Timeout):
+        st.error("删除失败：后端没响应")
+        return False
+    if res.status_code != 200:
+        st.error(f"删除失败：{backend_error_message(res)}")
+        return False
+    return True
+
+
+def render_chunk_preview(doc_id: str):
+    """按需拉取某个文档的分块，展示页码/章节定位。"""
+    try:
+        res = requests.get(f"{BACKEND_KNOWLEDGE_URL}/{doc_id}", timeout=5)
+    except (requests.ConnectionError, requests.Timeout):
+        st.caption("（连不上后端）")
+        return
+    if res.status_code != 200:
+        st.caption(f"读取分块失败（{res.status_code}）")
+        return
+
+    doc = res.json()
+    st.divider()
+    st.caption(f"分块预览 · {doc['title']}")
+    if not doc["chunks"]:
+        st.caption("这个文档没有分块（可能是扫描件）")
+        return
+    for c in doc["chunks"]:
+        loc = []
+        if c.get("page_no"):
+            loc.append(f"第 {c['page_no']} 页")
+        if c.get("section_path"):
+            loc.append(c["section_path"])
+        st.markdown(f"`#{c['chunk_idx']}` " + (" · ".join(loc) if loc else "无定位"))
+        text = c["content"].replace("\n", " ")
+        st.caption(text[:160] + ("…" if len(text) > 160 else ""))
+
+
 with st.sidebar:
     if st.button("+ 新建会话", use_container_width=True, type="primary"):
         new_session()
@@ -94,40 +154,63 @@ with st.sidebar:
     # ========== 知识库面板 ==========
     with st.expander("📚 知识库", expanded=False):
         st.caption("上传文档后，AI 会根据资料回答")
-        doc_title = st.text_input("文档标题", placeholder="比如：员工手册")
-        doc_content = st.text_area(
-            "文档内容",
-            placeholder="把要让 AI 学习的资料粘贴到这里…",
-            height=120,
+        uploaded = st.file_uploader(
+            "上传文档",
+            type=["pdf", "docx", "md", "markdown", "txt"],
+            help="支持 PDF / Word(.docx) / Markdown / txt；老版 .doc 请先另存为 .docx",
         )
-        if st.button("上传到知识库", use_container_width=True, disabled=not (doc_title and doc_content)):
-            try:
-                res = requests.post(
-                    f"{BACKEND_KNOWLEDGE_URL}/upload",
-                    json={"title": doc_title, "content": doc_content},
-                    timeout=60,  # embedding 可能比较慢
-                )
-                if res.status_code == 200:
-                    st.success(f"上传成功！切成了 {res.json()['chunk_count']} 块")
-                    st.rerun()
+        if uploaded is not None and st.button(
+            "上传到知识库", use_container_width=True, type="primary", key="upload-file"
+        ):
+            data = upload_knowledge_file(uploaded)
+            if data is not None:
+                if data.get("duplicated"):
+                    st.info("内容相同，这篇文档已经在知识库里了")
+                elif data.get("needs_ocr"):
+                    st.warning("疑似扫描件，提取不到文字，暂无法入库检索")
                 else:
-                    st.error(f"上传失败：{backend_error_message(res)}")
-            except (requests.ConnectionError, requests.Timeout):
-                st.error("上传失败：后端没响应或超时")
+                    st.success(f"上传成功！切成 {data['chunk_count']} 块")
+                st.rerun()
 
         st.divider()
         st.caption("已上传的文档")
         try:
             res_docs = requests.get(BACKEND_KNOWLEDGE_URL, timeout=5)
-            if res_docs.status_code == 200:
+        except (requests.ConnectionError, requests.Timeout):
+            st.caption("（连不上后端）")
+        else:
+            if res_docs.status_code != 200:
+                st.caption(f"读取失败（{res_docs.status_code}）")
+            else:
                 docs = res_docs.json()["docs"]
                 if not docs:
                     st.caption("知识库还是空的")
-                else:
-                    for d in docs:
-                        st.write(f"**{d['title']}** · {d['chunk_count']} 块")
-        except (requests.ConnectionError, requests.Timeout):
-            st.caption("（连不上后端）")
+                for d in docs:
+                    meta = d["source_type"]
+                    if d.get("page_count"):
+                        meta += f" · {d['page_count']} 页"
+                    meta += f" · {d['chunk_count']} 块"
+                    if d.get("status") != "ready":
+                        meta += f" · {d['status']}"
+
+                    cols = st.columns([5, 1, 1])
+                    with cols[0]:
+                        st.markdown(f"**{d['title']}**")
+                        st.caption(meta)
+                    with cols[1]:
+                        if st.button("🔍", key=f"peek-{d['doc_id']}", help="查看分块"):
+                            opened = st.session_state.get("peek_doc") == d["doc_id"]
+                            st.session_state["peek_doc"] = None if opened else d["doc_id"]
+                            st.rerun()
+                    with cols[2]:
+                        if st.button("🗑", key=f"del-doc-{d['doc_id']}", help="删除此文档"):
+                            if delete_knowledge_doc(d["doc_id"]):
+                                if st.session_state.get("peek_doc") == d["doc_id"]:
+                                    st.session_state["peek_doc"] = None
+                                st.rerun()
+
+                if st.session_state.get("peek_doc"):
+                    render_chunk_preview(st.session_state["peek_doc"])
 
     st.divider()
 
