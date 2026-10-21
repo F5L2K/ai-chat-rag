@@ -1,0 +1,20 @@
+{
+  "description": "基于知识库中真实文档的检索评估标注集。语料来自 chat.db 里已入库的两篇文档。",
+  "note": "doc 对应 corpus_real/ 下文档去掉扩展名的文件名；must_contain 用较长短语，避免同一篇里其它块蒙混过关。",
+  "questions": [
+    { "id": "r01", "question": "入职满一年有多少天年假？", "doc": "公司制度", "must_contain": ["10 天带薪年假"] },
+    { "id": "r02", "question": "入职满五年年假是多少天？", "doc": "公司制度", "must_contain": ["15 天，封顶"] },
+    { "id": "r03", "question": "病假每个月有几天？", "doc": "公司制度", "must_contain": ["2 天全薪病假"] },
+    { "id": "r04", "question": "工资每个月几号发？", "doc": "公司制度", "must_contain": ["10 日发放上月工资"] },
+    { "id": "r05", "question": "年终奖一般发几个月？", "doc": "公司制度", "must_contain": ["1～3 个月工资"] },
+
+    { "id": "r06", "question": "班委会由哪些人组成？", "doc": "大学班级综合管理制度", "must_contain": ["班委会由班长"] },
+    { "id": "r07", "question": "班委例会多久开一次？", "doc": "大学班级综合管理制度", "must_contain": ["每两周召开一次例会"] },
+    { "id": "r08", "question": "请假一天以内由谁审批？", "doc": "大学班级综合管理制度", "must_contain": ["1 天以内由辅导员审批"] },
+    { "id": "r09", "question": "迟到早退会怎么处理？", "doc": "大学班级综合管理制度", "must_contain": ["迟到、早退每次扣相应积分"] },
+    { "id": "r10", "question": "宿舍卫生多久检查一次？", "doc": "大学班级综合管理制度", "must_contain": ["每周组织一次宿舍卫生检查"] },
+    { "id": "r11", "question": "宿舍晚上几点之后要降低音量？", "doc": "大学班级综合管理制度", "must_contain": ["23:00 后自觉降低音量"] },
+    { "id": "r12", "question": "班费大额支出需要走什么程序？", "doc": "大学班级综合管理制度", "must_contain": ["须经班会同意"] },
+    { "id": "r13", "question": "班费收支多久公示一次？", "doc": "大学班级综合管理制度", "must_contain": ["每月在班级群公示一次"] }
+  ]
+}

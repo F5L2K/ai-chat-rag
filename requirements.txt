@@ -20,7 +20,12 @@ langchain>=0.3
 langchain-community>=0.3
 langchain-openai>=0.2
 langchain-text-splitters>=0.3
+sentence-transformers>=3.0
 faiss-cpu>=1.8
+
+# ===== RAG：混合检索（BM25 稀疏召回）=====
+rank_bm25>=0.2
+jieba>=0.42
 
 # ===== 文档解析 =====
 pdfplumber>=0.11

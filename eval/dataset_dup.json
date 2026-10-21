@@ -1,0 +1,18 @@
+{
+  "description": "近重复对抗语料（corpus_dup/，6 篇 = 3 对同模板文档）的检索评估标注集。设计目的是给纯向量检索制造真实区分度：同一对文档句式完全相同，只有编号/数字不同（报警码 E101 vs E201、错误码 AUTH-1002 vs AUTH-1003、住宿标准 500 vs 600）。",
+  "note": "doc 对应 corpus_dup/ 下文档去掉扩展名的文件名；must_contain 用区分性最强的短语（多为编号/数字），防止同一对里另一篇蒙混过关；expect_section 是期望命中的章节。\n重点看 d01-d08：它们依赖的 E201/AUTH-1003/FILE-3003 这类编号几乎不含语义，向量容易在下游平滑掉，是 BM25 字面匹配的靶心。d09-d10 则检验「文档标题里才有的区域名」能否被路由到正确块。",
+  "questions": [
+    { "id": "d01", "question": "E201 报警表示什么问题？", "doc": "设备手册_AX-300", "must_contain": ["E201：过热保护"], "expect_section": "二、报警代码" },
+    { "id": "d02", "question": "E102 报警应该检查什么？", "doc": "设备手册_AX-200", "must_contain": ["E102：缺水报警"], "expect_section": "二、报警代码" },
+    { "id": "d03", "question": "滤芯是不是每运行 800 小时更换一次？", "doc": "设备手册_AX-300", "must_contain": ["800 小时更换一次滤芯"], "expect_section": "三、保养周期" },
+    { "id": "d04", "question": "E203 表示什么报警？", "doc": "设备手册_AX-300", "must_contain": ["E203：电压异常"], "expect_section": "二、报警代码" },
+
+    { "id": "d05", "question": "AUTH-1003 是什么错误？", "doc": "系统错误码表_v2", "must_contain": ["AUTH-1003：账号已被锁定，请等待 60 分钟"], "expect_section": "一、认证类" },
+    { "id": "d06", "question": "AUTH-1002 锁定后需要等多久？", "doc": "系统错误码表_v1", "must_contain": ["等待 30 分钟"], "expect_section": "一、认证类" },
+    { "id": "d07", "question": "FILE-3003 表示什么问题？", "doc": "系统错误码表_v2", "must_contain": ["FILE-3003：文件格式不支持"], "expect_section": "三、文件类" },
+    { "id": "d08", "question": "DB-2003 是什么错误？", "doc": "系统错误码表_v2", "must_contain": ["DB-2003：主键冲突"], "expect_section": "二、数据库类" },
+
+    { "id": "d09", "question": "北京出差住宿上限是多少？", "doc": "差旅报销标准_华北区", "must_contain": ["每晚 500 元"], "expect_section": "一、住宿标准" },
+    { "id": "d10", "question": "华东区每天的伙食补助是多少钱？", "doc": "差旅报销标准_华东区", "must_contain": ["每天补助 120 元"], "expect_section": "二、伙食补助" }
+  ]
+}

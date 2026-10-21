@@ -1,0 +1,43 @@
+{
+  "description": "基于当前知识库全部真实文档（3 篇）的检索评估标注集。语料见 corpus_kb/。r01-r18 为常规题（语义可解），h01-h09 为难题（依赖精确字面量）。",
+  "note": "doc 对应 corpus_kb/ 下文档去掉扩展名的文件名；must_contain 用较长短语，避免同一篇里其它块蒙混过关；expect_section 是期望命中的章节（取 section_path 的子串）。\n难题（h 开头）专门针对纯向量检索的盲区：答案由精确的数字、版本号、文件扩展名或条款编号区分，语义相近的干扰块很多。这类题在纯向量下容易漏，是衡量 BM25 混合检索收益的关键标尺。",
+  "questions": [
+    { "id": "r01", "question": "入职满一年有多少天年假？", "doc": "公司制度", "must_contain": ["10 天带薪年假"], "expect_section": "一、年假规定" },
+    { "id": "r02", "question": "入职满五年年假是多少天？", "doc": "公司制度", "must_contain": ["15 天，封顶"], "expect_section": "一、年假规定" },
+    { "id": "r03", "question": "病假每个月有几天？", "doc": "公司制度", "must_contain": ["2 天全薪病假"], "expect_section": "二、请假制度" },
+    { "id": "r04", "question": "工资每个月几号发？", "doc": "公司制度", "must_contain": ["10 日发放上月工资"], "expect_section": "三、薪资与福利" },
+    { "id": "r05", "question": "年终奖一般发几个月？", "doc": "公司制度", "must_contain": ["1～3 个月工资"], "expect_section": "三、薪资与福利" },
+
+    { "id": "r06", "question": "班委会由哪些人组成？", "doc": "大学班级综合管理制度", "must_contain": ["班委会由班长"], "expect_section": "第二章 组织与职责" },
+    { "id": "r07", "question": "班委例会多久开一次？", "doc": "大学班级综合管理制度", "must_contain": ["每两周召开一次例会"], "expect_section": "第二章 组织与职责" },
+    { "id": "r08", "question": "请假一天以内由谁审批？", "doc": "大学班级综合管理制度", "must_contain": ["1 天以内由辅导员审批"], "expect_section": "第三章 考勤制度" },
+    { "id": "r09", "question": "迟到早退会怎么处理？", "doc": "大学班级综合管理制度", "must_contain": ["迟到、早退每次扣相应积分"], "expect_section": "第三章 考勤制度" },
+    { "id": "r10", "question": "宿舍卫生多久检查一次？", "doc": "大学班级综合管理制度", "must_contain": ["每周组织一次宿舍卫生检查"], "expect_section": "第五章 宿舍管理制度" },
+    { "id": "r11", "question": "宿舍晚上几点之后要降低音量？", "doc": "大学班级综合管理制度", "must_contain": ["23:00 后自觉降低音量"], "expect_section": "第五章 宿舍管理制度" },
+    { "id": "r12", "question": "班费大额支出需要走什么程序？", "doc": "大学班级综合管理制度", "must_contain": ["须经班会同意"], "expect_section": "第六章 集体活动与班级事务" },
+    { "id": "r13", "question": "班费收支多久公示一次？", "doc": "大学班级综合管理制度", "must_contain": ["每月在班级群公示一次"], "expect_section": "第六章 集体活动与班级事务" },
+
+    { "id": "r14", "question": "单个文件最大不能超过多少？", "doc": "智慧办公系统_使用手册", "must_contain": ["50MB"], "expect_section": "（二）大小限制" },
+    { "id": "r15", "question": "系统支持哪些文件格式？", "doc": "智慧办公系统_使用手册", "must_contain": ["PDF、Word、Markdown、纯文本"], "expect_section": "（一）支持格式" },
+    { "id": "r16", "question": "登录二维码的有效期是多久？", "doc": "智慧办公系统_使用手册", "must_contain": ["60 秒"], "expect_section": "（二）扫码登录" },
+    { "id": "r17", "question": "检索默认返回几条结果？", "doc": "智慧办公系统_使用手册", "must_contain": ["前 3 条"], "expect_section": "（二）返回结果" },
+    { "id": "r18", "question": "忘记密码的重置链接有效期多久？", "doc": "智慧办公系统_使用手册", "must_contain": ["30 分钟"], "expect_section": "1.1 忘记密码怎么办" },
+
+    { "id": "h01", "question": "年假每次最少可以休几天？", "doc": "公司制度", "must_contain": ["每次最少 1 天"], "expect_section": "一、年假规定" },
+    { "id": "h02", "question": "病假超过规定的天数后按多少比例发工资？", "doc": "公司制度", "must_contain": ["按 80% 薪资发放"], "expect_section": "二、请假制度" },
+    { "id": "h03", "question": "产假遇到难产会增加多少天？", "doc": "公司制度", "must_contain": ["难产增加 15 天"], "expect_section": "二、请假制度" },
+    { "id": "h04", "question": "突发情况没能提前请假，要在几个工作日内补办手续？", "doc": "大学班级综合管理制度", "must_contain": ["事后 2 个工作日内补办"], "expect_section": "第三章 考勤制度" },
+    { "id": "h05", "question": "班费多少金额以上属于大额支出、需要经班会同意？", "doc": "大学班级综合管理制度", "must_contain": ["200 元以上"], "expect_section": "第六章 集体活动与班级事务" },
+    { "id": "h06", "question": "第十二条对上课纪律是怎么要求的？", "doc": "大学班级综合管理制度", "must_contain": ["不迟到、不早退、不无故缺课"], "expect_section": "第四章 课堂与学习制度" },
+    { "id": "h07", "question": "上传 .wps 格式的文件前需要先做什么？", "doc": "智慧办公系统_使用手册", "must_contain": ["另存为 .docx 或 .pdf"], "expect_section": "（一）支持格式" },
+    { "id": "h08", "question": "单次最多可以上传多少个文件？", "doc": "智慧办公系统_使用手册", "must_contain": ["单次最多上传 20 个文件"], "expect_section": "（二）大小限制" },
+    { "id": "h09", "question": "v1.1 版本修复了什么问题？", "doc": "智慧办公系统_使用手册", "must_contain": ["修复了上传大文件时的超时问题"], "expect_section": "（二）v1.1" },
+
+    { "id": "t01", "question": "班会一般多久召开一次？", "doc": "大学班级综合管理制度", "must_contain": ["班会原则上每月至少召开一次"], "expect_section": "第六章 集体活动与班级事务" },
+    { "id": "t02", "question": "初始密码是怎么发给员工的？", "doc": "智慧办公系统_使用手册", "must_contain": ["初始密码由管理员通过邮件下发"], "expect_section": "（一）账号密码登录" },
+    { "id": "t03", "question": "上传成功后却检索不到内容，可能是什么原因？", "doc": "智慧办公系统_使用手册", "must_contain": ["扫描件 PDF 因为没有文字层"], "expect_section": "1.2 上传之后检索不到内容" },
+    { "id": "t04", "question": "二维码扫不出来应该怎么排查？", "doc": "智慧办公系统_使用手册", "must_contain": ["请检查手机 App 是否为最新版本"], "expect_section": "1.3 二维码扫不出来" },
+    { "id": "t05", "question": "积分奖励在什么情况下可以获得？", "doc": "大学班级综合管理制度", "must_contain": ["给予积分奖励"], "expect_section": "第四章 课堂与学习制度" },
+    { "id": "t06", "question": "班费平时由谁保管？", "doc": "大学班级综合管理制度", "must_contain": ["班费由生活委员保管"], "expect_section": "第六章 集体活动与班级事务" }
+  ]
+}

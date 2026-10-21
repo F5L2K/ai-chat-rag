@@ -4,6 +4,9 @@
   1. documents 表 —— 文档级元数据（去重、权限、状态）
   2. chunks 表    —— 分块明细（全文 + 页码 + 章节），BM25 与重建索引都靠它
   3. FAISS 索引   —— 向量
+
+BM25 是第四路但不落盘：它从 chunks 表现场派生，加删后调 bm25.mark_dirty() 置脏，
+下次检索自动重建，所以不构成新的漂移源。
 """
 
 import hashlib
@@ -13,6 +16,7 @@ from langchain_core.documents import Document
 
 from app.core.logging import logger
 from app.db.connection import get_conn
+from app.services import bm25
 from app.services.chunking import build_chunks
 from app.services.parsing import ParseResult, parse_text
 from app.services.vector_store import get_vector_store, save_vector_store
@@ -26,7 +30,7 @@ def content_hash(content: str) -> str:
 def find_by_hash(hash_value: str) -> dict | None:
     conn = get_conn()
     row = conn.execute(
-        "SELECT doc_id, title, chunk_count FROM documents WHERE content_hash = ?",
+        "SELECT doc_id, title, chunk_count, page_count FROM documents WHERE content_hash = ?",
         (hash_value,),
     ).fetchone()
     conn.close()
@@ -50,7 +54,16 @@ def index_document(
     existing = find_by_hash(hash_value)
     if existing:
         logger.info("重复文档，跳过入库 title=%s doc_id=%s", title, existing["doc_id"])
-        return {**existing, "duplicated": True, "needs_ocr": False, "status": "ready"}
+        # 返回结构与首次入库保持一致：路由层要读 page_count，缺了会 500
+        return {
+            "doc_id": existing["doc_id"],
+            "title": existing["title"],
+            "chunk_count": existing["chunk_count"],
+            "page_count": existing["page_count"],
+            "needs_ocr": False,
+            "status": "ready",
+            "duplicated": True,
+        }
 
     chunks = build_chunks(parsed.blocks)
     doc_id = str(uuid.uuid4())
@@ -123,6 +136,8 @@ def index_document(
         ]
         get_vector_store().add_documents(docs, ids=chunk_ids)
         save_vector_store()
+        # BM25 索引从 chunks 派生，新块入库后置脏，下次检索自动重建
+        bm25.mark_dirty()
 
     logger.info(
         "文档已入库 title=%s doc_id=%s 切块=%d 页数=%s 状态=%s",
@@ -213,6 +228,8 @@ def delete_document(doc_id: str) -> bool:
         store = get_vector_store()
         store.delete(chunk_ids)
         save_vector_store()
+        # 同步置脏：不置脏就会继续召回已删除的块（漂移）
+        bm25.mark_dirty()
 
     logger.info("文档已删除 doc_id=%s 切块=%d", doc_id, len(chunk_ids))
     return True

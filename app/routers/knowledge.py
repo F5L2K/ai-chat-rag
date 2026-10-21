@@ -2,7 +2,7 @@
 
 两个上传入口：
   POST /api/knowledge/upload       JSON 传纯文本
-  POST /api/knowledge/upload-file  multipart 传文件（PDF / Word / Markdown / txt）
+  POST /api/knowledge/upload-file  multipart 传文件（PDF / Word / Markdown / txt / HTML）
 """
 
 import io

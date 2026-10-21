@@ -1,6 +1,6 @@
 """解析层的公共数据结构与工具。
 
-三种格式（PDF / Word / Markdown）的解析器都产出同样的 Block 列表，
+各格式（PDF / Word / Markdown / 纯文本 / HTML）的解析器都产出同样的 Block 列表，
 这样切分层只需要面对一种数据形状。
 """
 

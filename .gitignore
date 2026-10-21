@@ -24,3 +24,10 @@ make_pptx*.js
 # 工具生成的截图与临时文件
 _shots/
 _tmp_attachment
+
+# 评估产物（每次跑都能重新生成）
+eval/report*.json
+
+# 408 corpus temp clones (~900MB, nested .git) - never commit
+/408_corpus/_tmp_clone/
+

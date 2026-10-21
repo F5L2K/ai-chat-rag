@@ -1,7 +1,11 @@
+import json
 import uuid
 
 import requests
 import streamlit as st
+
+# 与后端 chat.py 的 CITATION_MARKER 保持一致
+CITATION_MARKER = "__CITATIONS_JSON__"
 
 BACKEND_CHAT_URL = "http://127.0.0.1:8000/api/chat"
 BACKEND_HISTORY_URL = "http://127.0.0.1:8000/api/history"
@@ -22,20 +26,63 @@ def backend_error_message(res) -> str:
 
 def stream_ai_reply(session_id: str, message: str):
     """生成器：逐块从后端接收 AI 回复，供 st.write_stream 消费。
-    yield 一次 = 吐出几个字；st.write_stream 会把它们逐字打到界面上。"""
+
+    同时检测引用标记 __CITATIONS_JSON__：标记前的文本正常 yield 给打字机，
+    标记后的 JSON 解析后存到 stream_ai_reply.citations 供调用方展示。
+    这样 st.write_stream 只显示干净的回复文本，引用 JSON 不会闪到界面上。
+    """
     res = requests.post(
         BACKEND_CHAT_URL,
         json={"session_id": session_id, "message": message},
-        stream=True,   # 关键：不等到全部下载完，来一块拿一块
-        timeout=120,   # 流式生成可能比较久，给足两分钟
+        stream=True,
+        timeout=120,
     )
-    # 流开始前就出错（如 422、500）：走老的错误契约
     if res.status_code != 200:
         raise RuntimeError(f"出错了（{res.status_code}）：{backend_error_message(res)}")
-    # 正常流式：逐块推送
+
+    buffer = ""
+    citations = []
+    in_citations = False
+    citation_buffer = ""
+    marker_len = len(CITATION_MARKER)
+
     for chunk in res.iter_content(decode_unicode=True):
-        if chunk:
-            yield chunk
+        if not chunk:
+            continue
+
+        if in_citations:
+            # 标记已出现，后续都是引用 JSON，不再 yield
+            citation_buffer += chunk
+            continue
+
+        buffer += chunk
+
+        if CITATION_MARKER in buffer:
+            # 找到标记：yield 标记前的文本，切到引用模式
+            text, _, rest = buffer.partition(CITATION_MARKER)
+            if text:
+                yield text
+            in_citations = True
+            citation_buffer = rest
+            buffer = ""
+        elif len(buffer) > marker_len:
+            # 持有末尾 marker_len 个字符防止标记被截断，其余安全 yield
+            safe = buffer[:-marker_len]
+            yield safe
+            buffer = buffer[-marker_len:]
+
+    # 没有标记的余量直接 yield（知识库为空或检索无结果时不会有标记）
+    if not in_citations and buffer:
+        yield buffer
+
+    # 解析引用 JSON 供调用方使用
+    if citation_buffer:
+        try:
+            citations = json.loads(citation_buffer.strip())
+        except json.JSONDecodeError:
+            pass
+
+    stream_ai_reply.citations = citations
 
 
 # ============== 侧边栏：会话列表 ==============
@@ -156,8 +203,8 @@ with st.sidebar:
         st.caption("上传文档后，AI 会根据资料回答")
         uploaded = st.file_uploader(
             "上传文档",
-            type=["pdf", "docx", "md", "markdown", "txt"],
-            help="支持 PDF / Word(.docx) / Markdown / txt；老版 .doc 请先另存为 .docx",
+            type=["pdf", "docx", "md", "markdown", "txt", "html", "htm"],
+            help="支持 PDF / Word(.docx) / Markdown / txt / HTML；老版 .doc 请先另存为 .docx",
         )
         if uploaded is not None and st.button(
             "上传到知识库", use_container_width=True, type="primary", key="upload-file"
@@ -273,6 +320,19 @@ if user_input:
             # 流开始前就失败（有状态码的错误）
             st.error(str(e))
             st.stop()
+
+        # 引用来源：检索到了资料就展示，让用户知道答案依据哪篇文档哪一章
+        citations = getattr(stream_ai_reply, "citations", [])
+        if citations:
+            st.markdown("---")
+            st.caption("📎 引用来源")
+            for c in citations:
+                loc = [f"**{c['title']}**"]
+                if c.get("section_path"):
+                    loc.append(c["section_path"])
+                if c.get("page_no"):
+                    loc.append(f"第 {c['page_no']} 页")
+                st.markdown(f"[{c['ref']}] {' · '.join(loc)}")
 
     # 流结束后才归档；如果回复里含 [错误] 标记（流中间出的错），不入库
     if "[错误]" not in ai_reply:

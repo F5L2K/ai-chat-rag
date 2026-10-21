@@ -3,8 +3,13 @@
 注意：流式接口一旦开始推送就没法回头改状态码，
 所以「流开始前的错误」用 HTTPException（有状态码），
 「流开始后的错误」直接在流里塞一段错误文字（此时状态码已经是 200）。
+
+引用标记机制：流正常结束后，在 save_message 之后 yield 一段 JSON 标记，
+前端检测到标记后解析引用列表并展示。标记不进 full_reply，不落库，
+因此数据库里存的始终是干净的模型回复文本。
 """
 
+import json
 import time
 
 from fastapi import APIRouter, HTTPException, Request
@@ -29,6 +34,9 @@ from app.services.chat_history import (
 from app.services.llm import client
 from app.services.rag import build_rag_prompt
 
+# 前端靠这个标记识别引用 JSON 段；选足够特殊的字符串避免与正常文本冲突
+CITATION_MARKER = "__CITATIONS_JSON__"
+
 router = APIRouter()
 
 
@@ -44,8 +52,8 @@ async def chat(req: ChatRequest, request: Request):
         request_id, req.session_id, len(history), preview(req.message),
     )
 
-    # RAG：只有最新这句问题用来检索（检索是找「跟此刻问题相关的资料」）
-    system_with_rag = build_rag_prompt(req.message, request_id)
+    # RAG：检索 + 拼 prompt，同时拿到引用列表（流末尾推给前端）
+    system_with_rag, citations = build_rag_prompt(req.message, request_id)
     full_messages = [{"role": "system", "content": system_with_rag}] + history
 
     def generate():
@@ -97,6 +105,11 @@ async def chat(req: ChatRequest, request: Request):
             "[%s] 生成完成 回复长度=%d 耗时=%.0fms",
             request_id, len(full_reply), (time.perf_counter() - started) * 1000,
         )
+
+        # 引用标记在落库之后 yield：不进 full_reply、不落库，
+        # 前端检测到标记后解析 JSON 并展示引用来源
+        if citations:
+            yield f"{CITATION_MARKER}{json.dumps(citations, ensure_ascii=False)}"
 
     # text/event-stream 是 SSE 标准 MIME，浏览器/客户端知道这是流式响应
     return StreamingResponse(generate(), media_type="text/event-stream")

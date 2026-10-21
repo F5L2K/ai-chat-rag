@@ -8,6 +8,7 @@ from pathlib import Path
 
 from app.core.logging import logger
 from app.services.parsing import docx as docx_parser
+from app.services.parsing import html as html_parser
 from app.services.parsing import markdown as markdown_parser
 from app.services.parsing import pdf as pdf_parser
 from app.services.parsing import plain as plain_parser
@@ -19,6 +20,8 @@ _SUFFIX_MAP = {
     ".md": markdown_parser.parse,
     ".markdown": markdown_parser.parse,
     ".txt": plain_parser.parse,
+    ".html": html_parser.parse,
+    ".htm": html_parser.parse,
 }
 
 # 这几种格式的解析器收的是文本，不是路径/流，需要先归一化
@@ -30,6 +33,7 @@ SUPPORTED_SUFFIXES = tuple(sorted(_SUFFIX_MAP))
 _HINTS = {
     ".doc": "老版 .doc 格式不支持，请在 Word 里另存为 .docx 再上传",
     ".wps": "暂不支持 .wps，请另存为 .docx 或 .pdf",
+    ".mhtml": "暂不支持 .mhtml，请在浏览器里另存为 .html 再上传",
 }
 
 
