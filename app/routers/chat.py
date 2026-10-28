@@ -36,6 +36,14 @@ from app.services.rag import build_rag_prompt
 
 # 前端靠这个标记识别引用 JSON 段；选足够特殊的字符串避免与正常文本冲突
 CITATION_MARKER = "__CITATIONS_JSON__"
+# 与引用标记同机制：流末尾在引用 JSON 之后再追加一段检索链路快照，
+# 前端解析后展示「🔍 本次检索过程」面板。标记不进 full_reply、不落库。
+TRACE_MARKER = "__RETRIEVAL_TRACE_JSON__"
+# 推理模型（deepseek-v4-pro 等）会先吐 reasoning_content（思考链）再吐 content（正式回答）。
+# 用这对标记把思考过程包起来推给前端：前端折叠展示「💭 思考过程」，
+# 不进 full_reply、不落库。非推理模型不吐 reasoning_content，这对标记不会出现，行为与以前一致。
+REASONING_START = "__REASONING_START__"
+REASONING_END = "__REASONING_END__"
 
 router = APIRouter()
 
@@ -52,24 +60,55 @@ async def chat(req: ChatRequest, request: Request):
         request_id, req.session_id, len(history), preview(req.message),
     )
 
-    # RAG：检索 + 拼 prompt，同时拿到引用列表（流末尾推给前端）
-    system_with_rag, citations = build_rag_prompt(req.message, request_id)
+    # RAG：检索 + 拼 prompt，同时拿到引用列表与检索链路快照（流末尾推给前端）
+    t_rag_start = time.perf_counter()
+    system_with_rag, citations, trace = build_rag_prompt(req.message, request_id)
+    t_rag_cost = (time.perf_counter() - t_rag_start) * 1000
     full_messages = [{"role": "system", "content": system_with_rag}] + history
+    logger.info("[%s] RAG 检索+拼 prompt 耗时=%.0fms", request_id, t_rag_cost)
 
     def generate():
         """生成器：yield 一次 = 推一块给前端，前端收到一块显示一块。"""
         full_reply = ""
+        reasoning_text = ""          # 思考链原文，不入库
+        reasoning_started = False   # 是否已推过 REASONING_START
+        reasoning_closed = False     # 是否已推过 REASONING_END
+        t_first_chunk = None
+        t_first_content = None
         started = time.perf_counter()
         try:
             stream = client.chat.completions.create(
                 model=CHAT_MODEL,
                 messages=full_messages,
                 stream=True,
+                # DeepSeek 扩展参数：low = 压缩思考链，首字更快；
+                # 想恢复深度思考改回 "high" 或删掉这行。
+                extra_body={"effort": "low"},
             )
             for chunk in stream:
+                if t_first_chunk is None:
+                    t_first_chunk = (time.perf_counter() - started) * 1000
+                    logger.info("[%s] LLM 首块到达=%.0fms", request_id, t_first_chunk)
                 # 每个 chunk 里可能有 delta.content（增量的几个字），也可能没有
                 delta = chunk.choices[0].delta
+                # 推理模型：先吐 reasoning_content（思考链），再吐 content（正式回答）。
+                # 用 getattr 兼容非推理模型的 Delta 对象（没有这个字段）。
+                reasoning_chunk = getattr(delta, "reasoning_content", None)
+                if reasoning_chunk:
+                    if not reasoning_started:
+                        yield REASONING_START
+                        reasoning_started = True
+                    reasoning_text += reasoning_chunk
+                    # 思考块原样推给前端，由前端在 START/END 之间收集、折叠展示
+                    yield reasoning_chunk
                 if delta.content:
+                    if t_first_content is None:
+                        t_first_content = (time.perf_counter() - started) * 1000
+                        logger.info("[%s] LLM 首条正式回答到达=%.0fms（思考占=%.0fms）", request_id, t_first_content, t_first_content - (t_first_chunk or 0))
+                    # 思考阶段结束 → 补一个 END 标记，再开始推正式回答
+                    if reasoning_started and not reasoning_closed:
+                        yield REASONING_END
+                        reasoning_closed = True
                     full_reply += delta.content
                     yield delta.content
         except APITimeoutError:
@@ -110,6 +149,10 @@ async def chat(req: ChatRequest, request: Request):
         # 前端检测到标记后解析 JSON 并展示引用来源
         if citations:
             yield f"{CITATION_MARKER}{json.dumps(citations, ensure_ascii=False)}"
+        # 引用之后再追加检索链路快照（trace 在前、cit 在后时 JSON 会粘连，
+        # 固定 trace 在最后，前端按 TRACE_MARKER 切开即可）
+        if trace:
+            yield f"{TRACE_MARKER}{json.dumps(trace, ensure_ascii=False)}"
 
     # text/event-stream 是 SSE 标准 MIME，浏览器/客户端知道这是流式响应
     return StreamingResponse(generate(), media_type="text/event-stream")

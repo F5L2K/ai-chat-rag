@@ -59,6 +59,14 @@ RAG_BM25_TOP_K = 20
 # 作用是压平头部，让「两路都靠前」胜过「单路第一」，避免单路噪声通吃。
 RAG_RRF_K = 60
 
+# ==========OCR（扫描件 PDF 兜底）==========
+# 文字层为空的页会自动用 PyMuPDF 渲染成图，再走 RapidOCR 识别。
+# 未装 rapidocr-onnxruntime / pymupdf 时自动降级为「该页无文字」，
+# 不影响 PDF 主流程。设 OCR_ENABLED=0 可整体关闭。
+OCR_ENABLED = os.environ.get("OCR_ENABLED", "1") != "0"
+# 渲染 DPI：越高越清晰但越慢，200 对正文扫描件够用
+OCR_DPI = int(os.environ.get("OCR_DPI", "200"))
+
 # 人设：基于用户上传的资料问答。
 # 「有资料就依据资料、没答案就说不知道」这类约束在 rag.py 组装提示时追加，
 # 因为它只在检索到资料时才该生效，放在这里会变成无条件约束。

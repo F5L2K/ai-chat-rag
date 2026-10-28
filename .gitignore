@@ -31,3 +31,6 @@ eval/report*.json
 # 408 corpus temp clones (~900MB, nested .git) - never commit
 /408_corpus/_tmp_clone/
 
+
+# 个人简历描述，不公开
+AIChat_简历项目描述.md

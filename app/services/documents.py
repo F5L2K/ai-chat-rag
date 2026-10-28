@@ -159,6 +159,133 @@ def add_text_document(title: str, content: str) -> dict:
     return index_document(title, parse_text(content))
 
 
+def update_document(doc_id: str, parsed: ParseResult, source_path: str | None = None) -> dict:
+    """更新一篇已有文档：清掉旧 chunks 与向量，用新解析结果重建。
+
+    对应「知识数据接入与增量更新流程」里的更新环节：文档改版后不用删了重传，
+    传新版本上来，旧的 chunk 和向量同步失效，documents 主记录保留、version+1。
+    内容没变（content_hash 相同）时直接返回 unchanged，不动数据。
+    """
+    full_text = "\n".join(b.text for b in parsed.blocks)
+    new_hash = content_hash(full_text)
+
+    conn = get_conn()
+    try:
+        row = conn.execute(
+            "SELECT doc_id, title, content_hash, version FROM documents WHERE doc_id = ?",
+            (doc_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        old = dict(row)
+
+        if new_hash == old["content_hash"]:
+            logger.info("文档内容未变化，跳过更新 doc_id=%s", doc_id)
+            return {
+                "doc_id": doc_id,
+                "title": old["title"],
+                "version": old["version"],
+                "updated": False,
+                "unchanged": True,
+            }
+
+        old_chunk_ids = [
+            r["chunk_id"]
+            for r in conn.execute(
+                "SELECT chunk_id FROM chunks WHERE doc_id = ?", (doc_id,)
+            ).fetchall()
+        ]
+
+        chunks = build_chunks(parsed.blocks)
+        new_chunk_ids = [f"{doc_id}:{i}" for i in range(len(chunks))]
+        status = "needs_ocr" if (parsed.needs_ocr or not chunks) else "ready"
+
+        # 先删旧 chunks，再写新 chunks，同一事务里完成
+        conn.execute("DELETE FROM chunks WHERE doc_id = ?", (doc_id,))
+        if chunks:
+            conn.executemany(
+                """INSERT INTO chunks
+                   (chunk_id, doc_id, chunk_idx, content,
+                    page_no, section_path, char_start, char_end)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                [
+                    (
+                        new_chunk_ids[i],
+                        doc_id,
+                        i,
+                        c.text,
+                        c.page_no,
+                        c.section_path,
+                        c.char_start,
+                        c.char_end,
+                    )
+                    for i, c in enumerate(chunks)
+                ],
+            )
+        conn.execute(
+            """UPDATE documents SET
+                   source_type = ?, source_path = ?, content_hash = ?,
+                   page_count = ?, chunk_count = ?, status = ?,
+                   version = version + 1, updated_at = CURRENT_TIMESTAMP
+               WHERE doc_id = ?""",
+            (
+                parsed.source_type,
+                source_path,
+                new_hash,
+                parsed.page_count,
+                len(chunks),
+                status,
+                doc_id,
+            ),
+        )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+    # 向量库不在事务里：先删旧的，再加新的
+    if old_chunk_ids:
+        get_vector_store().delete(old_chunk_ids)
+    if chunks:
+        docs = [
+            Document(
+                page_content=c.text,
+                metadata={
+                    "doc_id": doc_id,
+                    "chunk_id": new_chunk_ids[i],
+                    "title": old["title"],
+                    "chunk_idx": i,
+                    "page_no": c.page_no,
+                    "section_path": c.section_path,
+                    "tenant_id": "default",
+                    "dept_id": None,
+                    "acl_tags": [],
+                },
+            )
+            for i, c in enumerate(chunks)
+        ]
+        get_vector_store().add_documents(docs, ids=new_chunk_ids)
+    save_vector_store()
+    bm25.mark_dirty()
+
+    logger.info(
+        "文档已更新 doc_id=%s 切块=%d 页数=%s 版本=%d→%d",
+        doc_id, len(chunks), parsed.page_count, old["version"], old["version"] + 1,
+    )
+    return {
+        "doc_id": doc_id,
+        "title": old["title"],
+        "chunk_count": len(chunks),
+        "page_count": parsed.page_count,
+        "needs_ocr": parsed.needs_ocr,
+        "status": status,
+        "version": old["version"] + 1,
+        "updated": True,
+    }
+
+
 def list_documents() -> list:
     conn = get_conn()
     rows = conn.execute("""
