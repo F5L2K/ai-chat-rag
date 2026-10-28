@@ -6,11 +6,53 @@ import streamlit as st
 
 # 与后端 chat.py 的 CITATION_MARKER 保持一致
 CITATION_MARKER = "__CITATIONS_JSON__"
+# 流末尾在引用 JSON 之后追加的检索链路快照标记
+TRACE_MARKER = "__RETRIEVAL_TRACE_JSON__"
+# 思考过程标记：推理模型先吐思考链再吐正式回答，这对标记把思考过程包起来
+REASONING_START = "__REASONING_START__"
+REASONING_END = "__REASONING_END__"
 
 BACKEND_CHAT_URL = "http://127.0.0.1:8000/api/chat"
 BACKEND_HISTORY_URL = "http://127.0.0.1:8000/api/history"
 BACKEND_SESSIONS_URL = "http://127.0.0.1:8000/api/sessions"
 BACKEND_KNOWLEDGE_URL = "http://127.0.0.1:8000/api/knowledge"
+
+
+# ============== 全局样式：窄阅读区 + 消息卡片/气泡 ==============
+# 纯 CSS 覆盖，不改任何业务逻辑：
+#   1. 主区限宽 900px —— 现在满屏宽，长行阅读很累
+#   2. 每条消息做成圆角卡片；用户消息浅蓝底（新版 Streamlit 带
+#      data-chat-message-author 属性，老版本命中不了就退化为统一卡片，不报错）
+st.markdown(
+    """
+<style>
+section.main .block-container {
+    max-width: 900px;
+    padding-top: 1.5rem;
+}
+div[data-testid="stChatMessage"] {
+    border: 1px solid #eceef2;
+    border-radius: 14px;
+    padding: 0.55rem 0.9rem;
+    margin-bottom: 0.6rem;
+    background: #ffffff;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
+}
+div[data-chat-message-author="user"] {
+    background: #eef4ff;
+    border-color: #dbe7ff;
+}
+</style>
+""",
+    unsafe_allow_html=True,
+)
+
+# 空会话欢迎页上的示例问题：都是当前知识库里有标准答案的题，点一下直接发
+EXAMPLE_QUESTIONS = [
+    "死锁和饥饿有什么区别？",
+    "数据结构里的时间复杂度是怎么算的？",
+    "MySQL 里 VARCHAR 和 CHAR 有什么区别？",
+]
 
 
 def backend_error_message(res) -> str:
@@ -27,61 +69,108 @@ def backend_error_message(res) -> str:
 def stream_ai_reply(session_id: str, message: str):
     """生成器：逐块从后端接收 AI 回复，供 st.write_stream 消费。
 
-    同时检测引用标记 __CITATIONS_JSON__：标记前的文本正常 yield 给打字机，
-    标记后的 JSON 解析后存到 stream_ai_reply.citations 供调用方展示。
-    这样 st.write_stream 只显示干净的回复文本，引用 JSON 不会闪到界面上。
+    协议（流可能含三种标记，按出现顺序）：
+      REASONING_START ... REASONING_END   思考链（推理模型）：收集到 reasoning_buffer，不渲染
+      CITATION_MARKER {json}              引用来源：收集到 citations
+      TRACE_MARKER {json}                  检索链路快照：收集到 stream_ai_reply.trace
+
+    普通文本块正常 yield 给打字机；思考链和标记 JSON 都不进打字机。
     """
     res = requests.post(
         BACKEND_CHAT_URL,
         json={"session_id": session_id, "message": message},
         stream=True,
-        timeout=120,
+        timeout=180,  # 推理模型思考阶段可能较长，给足
     )
     if res.status_code != 200:
         raise RuntimeError(f"出错了（{res.status_code}）：{backend_error_message(res)}")
 
+    # 函数属性在上次调用后可能残留，每次开始先清空
+    stream_ai_reply.citations = []
+    stream_ai_reply.trace = None
+    stream_ai_reply.reasoning = ""
+
     buffer = ""
-    citations = []
-    in_citations = False
+    reasoning_buffer = ""
     citation_buffer = ""
-    marker_len = len(CITATION_MARKER)
+    mode = "normal"  # normal | reasoning | citations
+    # 标记可能被 chunk 边界截断，保留最长标记长度的字符做滑动窗口
+    max_marker_len = max(len(CITATION_MARKER), len(REASONING_START), len(REASONING_END))
 
     for chunk in res.iter_content(decode_unicode=True):
         if not chunk:
             continue
-
-        if in_citations:
-            # 标记已出现，后续都是引用 JSON，不再 yield
-            citation_buffer += chunk
-            continue
-
         buffer += chunk
 
-        if CITATION_MARKER in buffer:
-            # 找到标记：yield 标记前的文本，切到引用模式
-            text, _, rest = buffer.partition(CITATION_MARKER)
-            if text:
-                yield text
-            in_citations = True
-            citation_buffer = rest
-            buffer = ""
-        elif len(buffer) > marker_len:
-            # 持有末尾 marker_len 个字符防止标记被截断，其余安全 yield
-            safe = buffer[:-marker_len]
-            yield safe
-            buffer = buffer[-marker_len:]
+        # 状态机：反复扫描 buffer，直到没有可识别的标记边界
+        while True:
+            if mode == "citations":
+                # citations 模式下后续全是 JSON（含 trace 标记），整体攒着
+                citation_buffer += buffer
+                buffer = ""
+                break
 
-    # 没有标记的余量直接 yield（知识库为空或检索无结果时不会有标记）
-    if not in_citations and buffer:
+            if mode == "reasoning":
+                end_idx = buffer.find(REASONING_END)
+                if end_idx >= 0:
+                    reasoning_buffer += buffer[:end_idx]
+                    buffer = buffer[end_idx + len(REASONING_END):]
+                    mode = "normal"
+                else:
+                    # END 可能被截断：保留末尾 max_marker_len 个字符，其余落盘
+                    if len(buffer) > max_marker_len:
+                        reasoning_buffer += buffer[:-max_marker_len]
+                        buffer = buffer[-max_marker_len:]
+                    break
+
+            # normal 模式：先看 citation 还是 reasoning 先出现
+            cit_idx = buffer.find(CITATION_MARKER)
+            rea_idx = buffer.find(REASONING_START)
+            if cit_idx >= 0 and (rea_idx < 0 or cit_idx < rea_idx):
+                if cit_idx > 0:
+                    yield buffer[:cit_idx]
+                buffer = buffer[cit_idx + len(CITATION_MARKER):]
+                mode = "citations"
+            elif rea_idx >= 0:
+                if rea_idx > 0:
+                    yield buffer[:rea_idx]
+                buffer = buffer[rea_idx + len(REASONING_START):]
+                mode = "reasoning"
+            else:
+                # 没有任何标记：保留末尾 max_marker_len 个字符防截断
+                if len(buffer) > max_marker_len:
+                    yield buffer[:-max_marker_len]
+                    buffer = buffer[-max_marker_len:]
+                break
+
+    # 流结束后收尾
+    if mode == "reasoning" and buffer:
+        reasoning_buffer += buffer
+    if mode == "normal" and buffer:
         yield buffer
 
-    # 解析引用 JSON 供调用方使用
+    # citation_buffer 里 = 引用 JSON + [TRACE_MARKER + 检索链路 JSON]
     if citation_buffer:
-        try:
-            citations = json.loads(citation_buffer.strip())
-        except json.JSONDecodeError:
-            pass
+        raw = citation_buffer.strip()
+        if TRACE_MARKER in raw:
+            cit_part, _, trace_part = raw.partition(TRACE_MARKER)
+            try:
+                citations = json.loads(cit_part.strip())
+            except json.JSONDecodeError:
+                citations = []
+            try:
+                stream_ai_reply.trace = json.loads(trace_part.strip())
+            except json.JSONDecodeError:
+                stream_ai_reply.trace = None
+        else:
+            try:
+                citations = json.loads(raw)
+            except json.JSONDecodeError:
+                citations = []
+    else:
+        citations = []
 
+    stream_ai_reply.reasoning = reasoning_buffer
     stream_ai_reply.citations = citations
 
 
@@ -203,8 +292,8 @@ with st.sidebar:
         st.caption("上传文档后，AI 会根据资料回答")
         uploaded = st.file_uploader(
             "上传文档",
-            type=["pdf", "docx", "md", "markdown", "txt", "html", "htm"],
-            help="支持 PDF / Word(.docx) / Markdown / txt / HTML；老版 .doc 请先另存为 .docx",
+            type=["pdf", "docx", "xlsx", "xlsm", "md", "markdown", "txt", "html", "htm"],
+            help="支持 PDF / Word(.docx) / Excel(.xlsx) / Markdown / txt / HTML；扫描版 PDF 自动 OCR；老版 .doc/.xls 请先另存为新格式",
         )
         if uploaded is not None and st.button(
             "上传到知识库", use_container_width=True, type="primary", key="upload-file"
@@ -299,17 +388,41 @@ if need_load:
 
 # 渲染历史消息
 for msg in st.session_state.messages:
-    with st.chat_message(msg["role"]):
+    avatar = "🧑" if msg["role"] == "user" else "🤖"
+    with st.chat_message(msg["role"], avatar=avatar):
         st.markdown(msg["content"])
+
+# 空会话：欢迎页 + 示例问题卡片（点按钮等价于在输入框敲了这句话）
+if not st.session_state.messages:
+    st.markdown(
+        """
+        <div style="padding: 3rem 1.2rem 0.5rem 1.2rem;">
+          <h2 style="font-weight:700; margin-bottom:0.4rem;">👋 你好，我是本地知识库 AI 问答助手</h2>
+          <p style="color:#64748b; margin-bottom:0;">
+            本地知识库问答助手 · 答案附章节级引用 · 检索过程全程可见
+          </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.caption("试试点下面的问题开始：")
+    for q in EXAMPLE_QUESTIONS:
+        if st.button(q, key=f"example-{q}", use_container_width=True):
+            st.session_state["pending_question"] = q
+            st.rerun()
 
 # 输入框
 user_input = st.chat_input("请输入你的问题")
+# 点了示例卡片时没有手敲输入，从 session_state 取回这句话，走同一条提问流程
+if not user_input:
+    user_input = st.session_state.pop("pending_question", None)
+
 if user_input:
-    with st.chat_message("user"):
+    with st.chat_message("user", avatar="🧑"):
         st.markdown(user_input)
     st.session_state.messages.append({"role": "user", "content": user_input})
 
-    with st.chat_message("assistant"):
+    with st.chat_message("assistant", avatar="🤖"):
         try:
             # st.write_stream 吃一个生成器，自动实现打字机效果，返回完整文本
             ai_reply = st.write_stream(stream_ai_reply(st.session_state.session_id, user_input))
@@ -320,6 +433,12 @@ if user_input:
             # 流开始前就失败（有状态码的错误）
             st.error(str(e))
             st.stop()
+
+        # 思考过程：推理模型先思考再回答，把思考链折叠展示，让用户知道刚才那十几秒在干嘛
+        reasoning = getattr(stream_ai_reply, "reasoning", "")
+        if reasoning:
+            with st.expander("💭 AI 思考过程", expanded=False):
+                st.caption(reasoning.strip())
 
         # 引用来源：检索到了资料就展示，让用户知道答案依据哪篇文档哪一章
         citations = getattr(stream_ai_reply, "citations", [])
@@ -333,6 +452,40 @@ if user_input:
                 if c.get("page_no"):
                     loc.append(f"第 {c['page_no']} 页")
                 st.markdown(f"[{c['ref']}] {' · '.join(loc)}")
+
+        # 检索过程面板：把「提问 → 双路召回 → 融合 → 精排 → 送入 LLM」这条链路
+        # 逐步摊开，让用户看到答案到底是从哪些块里捞出来的
+        trace = getattr(stream_ai_reply, "trace", None)
+        if trace:
+            with st.expander("🔍 本次检索过程", expanded=False):
+                n_dense = len(trace.get("dense_raw", []))
+                n_bm25 = len(trace.get("bm25", []))
+                n_final = len(trace.get("final", []))
+                chain = f"知识库共 {trace.get('total_chunks', '?')} 块 ｜ 向量召回 {n_dense} 条"
+                if trace.get("rerank_on"):
+                    chain += " → Cross-encoder 精排"
+                chain += f" ｜ BM25 字面召回 {n_bm25} 条 → RRF 融合 → 最终送入 LLM {n_final} 条"
+                st.caption(chain)
+
+                steps = [
+                    ("① 向量召回", trace.get("dense_raw", [])),
+                    ("② 精排后", trace.get("dense_reranked", [])),
+                    ("③ BM25 召回", trace.get("bm25", [])),
+                    ("④ RRF 融合", trace.get("fused", [])),
+                    ("⑤ 送入 LLM", trace.get("final", [])),
+                ]
+                tabs = st.tabs([f"{name}({len(items)})" for name, items in steps])
+                for tab, (_, items) in zip(tabs, steps):
+                    with tab:
+                        if not items:
+                            st.caption("（此路已关闭或无召回）")
+                            continue
+                        for i, it in enumerate(items, 1):
+                            loc = f"**{it.get('title', '')}**"
+                            if it.get("section_path"):
+                                loc += f" · {it['section_path']}"
+                            st.markdown(f"`#{i}` " + loc)
+                            st.caption((it.get("snippet") or "")[:110])
 
     # 流结束后才归档；如果回复里含 [错误] 标记（流中间出的错），不入库
     if "[错误]" not in ai_reply:

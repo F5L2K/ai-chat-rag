@@ -3,6 +3,7 @@
 这是后端的唯一入口，backend.py 只是它的一层壳。
 """
 
+import threading
 import time
 import uuid
 
@@ -67,3 +68,30 @@ app.include_router(knowledge.router, prefix="/api/knowledge", tags=["knowledge"]
 
 # 模块加载时执行一次：进程启动 → 确保表存在
 init_db()
+
+
+def _warmup_models():
+    """后台预热：在后台线程里把 embedding / 向量库 / reranker / BM25 都加载好。
+
+    不阻塞 uvicorn 启动：后端端口立刻能接请求，但如果第一个问答请求
+    在预热完成前进来，仍会等模型加载完（与原来懒加载行为一致）。
+    预热完成后，所有请求都走热缓存，不再有 35 秒冷启动等待。
+    """
+    try:
+        from app.services.vector_store import get_vector_store
+        from app.services.rerank import _get_model as _get_reranker
+        from app.services.bm25 import search as _bm25_search
+
+        t0 = time.perf_counter()
+        logger.info("后台预热开始：加载 embedding + 向量库 + reranker + BM25...")
+        get_vector_store()          # 内部会触发 embedding 加载 + FAISS 读盘
+        _get_reranker()            # 触发 cross-encoder 加载
+        _bm25_search("预热探针", 1)  # 触发 BM25 索引构建
+        logger.info("后台预热完成，耗时=%.0fms", (time.perf_counter() - t0) * 1000)
+    except Exception as e:
+        # 预热失败不影响启动：第一个请求会走懒加载兜底
+        logger.warning("后台预热失败（%s），将退回懒加载", e)
+
+
+# daemon 线程：主进程退出时跟着退，不阻塞关机
+threading.Thread(target=_warmup_models, daemon=True, name="model-warmup").start()

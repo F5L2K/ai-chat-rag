@@ -1,8 +1,8 @@
-# AIChat - 带知识库的 AI 聊天助手
+# 基于 RAG 的本地知识库 AI 问答助手
 
-基于 **FastAPI + Streamlit + DeepSeek + RAG** 的本地 AI 聊天助手。支持多会话聊天、流式输出，以及上传 PDF / Word / Markdown / 文本 / HTML 构建本地知识库（向量检索问答，回复带引用来源），并内置一套可复跑的检索评估，用来量化「知识库检索准不准」。
+基于 **FastAPI + Streamlit + DeepSeek + RAG** 的本地 AI 问答助手。支持多会话聊天、流式输出，以及上传 PDF / Word / Markdown / 文本 / HTML 构建本地知识库（向量检索问答，回复带引用来源），并内置一套可复跑的检索评估，用来量化「知识库检索准不准」。
 
-![AIChat 检索链路架构图](docs/architecture.svg)
+![检索链路架构图](docs/architecture.svg)
 
 | 聊天界面（回答带章节级引用） | 知识库管理（多格式文档入库） |
 |---|---|
@@ -12,7 +12,9 @@
 
 - 💬 **多会话聊天**：会话自动保存到本地 SQLite，刷新页面不丢失，支持新建 / 切换 / 删除
 - ⚡ **流式输出**：AI 回复逐字显示，无需等待完整生成
-- 📚 **多格式知识库**：支持 PDF / Word(.docx) / Markdown / txt / HTML(.html/.htm) 上传，自动解析、切块、向量化并建索引
+- 📚 **多格式知识库**：支持 PDF / Word(.docx) / Excel(.xlsx/.xlsm) / Markdown / txt / HTML(.html/.htm) 上传，自动解析、切块、向量化并建索引
+- 📷 **扫描件 PDF 自动 OCR**：文字层为空的页自动用 PyMuPDF 渲染成图，走 RapidOCR 识别文字；OCR 库未装或失败时自动降级为 `needs_ocr`，主流程不中断
+- 📊 **Excel 表格解析**：每个工作表转成一个 Markdown 表格块，sheet 名作为章节路径（`工作表: <sheet名>`），行列关系保留给大模型读
 - 🔖 **页码与章节定位**：解析时保留每块的来源页码（PDF）与章节路径（PDF / Word / Markdown / txt / HTML 全格式），是引用定位的底层支撑
 - 📎 **回答带引用**：模型在关键信息后用 `[1]` `[2]` 标注来源，回复下方展示「引用来源」（文档标题 · 章节 · 页码），让答案可回查、可验证
 - 🧠 **本地向量化**：使用 `BAAI/bge-small-zh-v1.5` 本地 embedding 模型，不依赖额外 API；索引懒加载并落盘，重启后自动恢复
@@ -31,7 +33,8 @@
 | 前端 | Streamlit |
 | 大模型 | DeepSeek（OpenAI 兼容接口） |
 | 引用来源 | 检索块的 metadata（title / section_path / page_no）→ 流末尾附加标记 `__CITATIONS_JSON__` → 前端解析展示（零新依赖） |
-| 文档解析 | pdfplumber（PDF）· python-docx（Word）· 正则（Markdown / txt）· 标准库 html.parser（HTML） |
+| 文档解析 | pdfplumber（PDF 矢量文字与表格）· python-docx（Word）· openpyxl（Excel 逐 sheet 转 Markdown）· 正则（Markdown / txt）· 标准库 html.parser（HTML） |
+| 扫描件 OCR | PyMuPDF（页面渲染为图）· RapidOCR（onnxruntime 中文识别）；软依赖，未装自动降级为 needs_ocr |
 | 文本切分 | 章节 / 页码感知切分 + LangChain RecursiveCharacterTextSplitter（500/50） |
 | 向量检索 | LangChain · FAISS · sentence-transformers |
 | 重排序 | Cross-encoder（`BAAI/bge-reranker-base`，与 embedding 同为 bge 系列）· 两阶段「向量召回 → 精排」，可开关、可降级 |
@@ -52,7 +55,7 @@ AIChat/
 │   ├── models/           # schemas.py（请求数据契约）
 │   ├── routers/          # chat.py（聊天 / 会话）· knowledge.py（知识库）
 │   └── services/
-│       ├── parsing/      # 文档解析层：base / pdf / docx / markdown / plain / html
+│       ├── parsing/      # 文档解析层：base / pdf(+OCR) / docx / xlsx / markdown / plain / html / ocr
 │       ├── chunking.py   # 章节感知切分
 │       ├── documents.py  # 文档入库 / 查询 / 删除（表与向量库同步）
 │       ├── vector_store.py   # FAISS 懒加载与落盘
@@ -147,6 +150,8 @@ streamlit run frontend.py
 | GET | `/api/knowledge` | 文档列表 |
 | GET | `/api/knowledge/{doc_id}` | 文档详情（含分块与页码 / 章节） |
 | DELETE | `/api/knowledge/{doc_id}` | 删除文档（同步清理向量库） |
+| POST | `/api/knowledge/{doc_id}/reupload` | 用新版本文件替换已有文档（旧 chunks 与向量同步失效，version+1；内容未变则跳过） |
+| POST | `/api/knowledge/{doc_id}/summarize` | 对已有文档生成 200 字以内要点式摘要 |
 
 ## 使用方法
 
@@ -426,8 +431,8 @@ python eval/run_eval.py --corpus corpus_dup --dataset dataset_dup.json \
 | 模型下载超时 | 代码已内置 `HF_ENDPOINT=https://hf-mirror.com`（见 `app/__init__.py`），若仍失败请检查网络 |
 | 首次提问 / 首次 `--rerank` 评估特别慢 | 首次要下载重排序模型 `bge-reranker-base`（约 1.1GB）。国内镜像速度有限，耐心等待一次即可，之后走本地缓存；不想等可设 `RAG_RERANK_ENABLED=0` 先用单阶段 |
 | 重排序模型下载失败会不会影响使用 | 不会。`rerank.py` 做了降级：加载或推理异常会自动退回向量排序并打 warning，检索链路不中断 |
-| 上传 `.doc` / `.wps` 报错 | 老版格式不支持，请在 Word 里另存为 `.docx` 或导出 PDF |
-| PDF 上传后没有内容 | 该 PDF 可能是扫描件（没有文字层），会被标记为 `needs_ocr`，当前版本未接入 OCR |
+| 上传 `.doc` / `.xls` / `.wps` 报错 | 老版二进制格式不支持，请在 Word / Excel 里另存为 `.docx` / `.xlsx` 再上传 |
+| PDF 上传后没有内容 | 该 PDF 是扫描件（图片型）。已装 OCR 依赖时会自动识别；若仍提示「需 OCR」，说明未装 `rapidocr-onnxruntime` + `pymupdf`，见下方依赖说明 |
 | HTML 上传后正文不全 | 只提取可见文本（`script` / `style` / `head` 等内容会被跳过）。若正文由 JS 动态渲染，请先在浏览器里「另存为完整网页」再上传 |
 | 回复下方没有引用来源 | 知识库为空、或本次未检索到相关资料时不会产生引用，属正常行为；先确认文档已上传且能在列表看到 |
 | 引用里章节显示为「无定位」 | 老版本上传的文档 metadata 里没有 `section_path`。删除该文档后用当前版本重新上传即可带上章节（不会自动补写历史数据） |

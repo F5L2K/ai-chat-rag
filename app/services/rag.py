@@ -38,12 +38,28 @@ from app.services.rerank import rerank_documents
 from app.services.vector_store import get_vector_store
 
 
-def retrieve_relevant(query: str, request_id: str = "-") -> list[Document]:
+def _brief(doc: Document) -> dict:
+    """把一条候选块压成前端面板要展示的简略信息（不进 prompt、不落库）。"""
+    meta = doc.metadata
+    return {
+        "title": meta.get("title", ""),
+        "section_path": meta.get("section_path"),
+        "page_no": meta.get("page_no"),
+        "snippet": doc.page_content.replace("\n", " ")[:120],
+    }
+
+
+def retrieve_relevant(
+    query: str, request_id: str = "-", trace: dict | None = None
+) -> list[Document]:
     """稠密 + 稀疏双路检索，返回最相关的 RAG_TOP_K 个片段（含 metadata）。
 
     这里必须走 get_vector_store() 做懒加载，不能直接判断全局变量是否为 None：
     全局变量只在「上传文档」时被赋值，后端一重启它就是 None，
     检索会永远返回空列表 —— 模型拿不到资料却照常作答，属于静默降级，不报任何错。
+
+    trace：传入 dict 时把每一步候选（向量召回原始序 / 精排后 / BM25 / 融合 / 最终）
+    记录进去，供前端「检索过程」面板展示；不传则行为与以前完全一致。
     """
     store = get_vector_store()
     total = store.index.ntotal
@@ -53,9 +69,10 @@ def retrieve_relevant(query: str, request_id: str = "-") -> list[Document]:
 
     # 稠密路：向量召回。候选数取 min(召回池, 库内总量)，并保证不少于 RAG_TOP_K
     recall_k = max(RAG_TOP_K, min(RAG_RECALL_K, total))
-    dense = store.similarity_search(query, k=recall_k)
+    dense_raw = store.similarity_search(query, k=recall_k)
 
     # 稠密路精排：整批重排出顺序（多排几档，给融合留腾挪空间；可关闭/可降级）
+    dense = dense_raw
     if RAG_RERANK_ENABLED:
         dense = rerank_documents(query, dense, recall_k, request_id)
 
@@ -66,11 +83,27 @@ def retrieve_relevant(query: str, request_id: str = "-") -> list[Document]:
 
     # 融合：BM25 作为平局裁决方（字面证据精确），最后取 RAG_TOP_K 条
     if bm25_hits:
-        docs = rrf_fuse([dense, bm25_hits], RAG_RRF_K, tiebreak_list=bm25_hits)[
-            :RAG_TOP_K
-        ]
+        fused = rrf_fuse([dense, bm25_hits], RAG_RRF_K, tiebreak_list=bm25_hits)
+        docs = fused[:RAG_TOP_K]
     else:
+        fused = dense
         docs = dense[:RAG_TOP_K]
+
+    # 记录检索链路快照：前端面板按这 5 步展示「候选是怎么一步步筛到 3 条的」
+    if trace is not None:
+        trace.update({
+            "query": query,
+            "total_chunks": total,
+            "recall_k": recall_k,
+            "top_k": RAG_TOP_K,
+            "rerank_on": bool(RAG_RERANK_ENABLED),
+            "hybrid_on": bool(RAG_HYBRID_ENABLED),
+            "dense_raw": [_brief(d) for d in dense_raw],
+            "dense_reranked": [_brief(d) for d in dense],
+            "bm25": [_brief(d) for d in bm25_hits],
+            "fused": [_brief(d) for d in fused[:10]],
+            "final": [_brief(d) for d in docs],
+        })
 
     logger.info(
         "[%s] 检索完成 向量库总量=%d 稠密=%d BM25=%d 混合=%s 重排=%s 命中=%d 问题=%s",
@@ -88,19 +121,22 @@ def retrieve_relevant(query: str, request_id: str = "-") -> list[Document]:
 
 def build_rag_prompt(
     query: str, request_id: str = "-"
-) -> tuple[str, list[dict]]:
+) -> tuple[str, list[dict], dict | None]:
     """把检索到的资料拼进 system prompt，让模型根据资料回答。
 
-    返回 (prompt, citations)：
+    返回 (prompt, citations, trace)：
       - prompt 里每条资料带编号，并指示模型用 [1] [2] 标注引用来源
       - citations 是 [{ref, title, section_path, page_no}] 列表，
         chat.py 在流末尾推给前端，前端展示「📎 引用来源」
+      - trace 是检索链路快照（向量召回→精排→BM25→融合→最终各步候选），
+        知识库为空时为 None；chat.py 随流末尾推给前端展示「🔍 本次检索过程」
     """
-    docs = retrieve_relevant(query, request_id)
+    trace: dict = {}
+    docs = retrieve_relevant(query, request_id, trace=trace)
     if not docs:
         # 不静默：这条日志是排查「回答没依据」时的第一现场
         logger.warning("[%s] 未检索到资料，本次回答不携带知识库上下文", request_id)
-        return SYSTEM_PROMPT, []
+        return SYSTEM_PROMPT, [], None
 
     # 每条资料带编号拼进 prompt
     context_parts = []
@@ -126,4 +162,4 @@ def build_rag_prompt(
         f"{context}\n"
         f"===== 参考资料结束 ====="
     )
-    return prompt, citations
+    return prompt, citations, trace

@@ -11,6 +11,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 
+from app.core.config import CHAT_MODEL
 from app.core.logging import logger
 from app.models.schemas import DocUploadRequest
 from app.services.documents import (
@@ -19,7 +20,9 @@ from app.services.documents import (
     get_document,
     index_document,
     list_documents,
+    update_document,
 )
+from app.services.llm import client
 from app.services.parsing import parse_document
 
 router = APIRouter()
@@ -135,3 +138,107 @@ async def remove_doc(doc_id: str, request: Request):
         })
     logger.info("[%s] 文档已删除 doc_id=%s", request_id, doc_id)
     return {"deleted": 1, "doc_id": doc_id}
+
+
+@router.post("/{doc_id}/reupload")
+async def reupload_file(
+    doc_id: str,
+    request: Request,
+    file: UploadFile = File(...),
+):
+    """用新版本文件替换已有文档：旧 chunks 与向量同步失效，version+1。
+
+    对应知识更新流程：制度改版后不用删了重传，直接传新版本上来。
+    内容没变（content_hash 相同）时返回 unchanged=true，不动数据。
+    """
+    request_id = getattr(request.state, "request_id", "-")
+    filename = file.filename or "unnamed"
+    started = time.perf_counter()
+    data = await file.read()
+
+    try:
+        parsed = parse_document(filename, io.BytesIO(data))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail={
+            "code": "unsupported_file",
+            "message": str(e),
+        })
+    except Exception as e:
+        logger.exception("[%s] 更新文件解析失败 file=%s", request_id, filename)
+        raise HTTPException(status_code=400, detail={
+            "code": "parse_failed",
+            "message": f"文件解析失败：{e}",
+        })
+
+    result = update_document(doc_id, parsed, source_path=filename)
+    if result is None:
+        raise HTTPException(status_code=404, detail={
+            "code": "doc_not_found",
+            "message": "文档不存在",
+        })
+    logger.info(
+        "[%s] 文件更新完成 file=%s updated=%s 耗时=%.0fms",
+        request_id, filename, result.get("updated"),
+        (time.perf_counter() - started) * 1000,
+    )
+    return result
+
+
+@router.post("/{doc_id}/summarize")
+async def summarize_doc(doc_id: str, request: Request):
+    """对知识库里已有文档生成摘要：从 chunks 拼全文，交给 LLM 概括。
+
+    属于「结合业务场景开发 AI 应用」里的文档摘要能力。
+    全文截断到 _SUMMARY_MAX_CHARS 防止超出模型上下文。
+    """
+    request_id = getattr(request.state, "request_id", "-")
+    doc = get_document(doc_id)
+    if doc is None:
+        raise HTTPException(status_code=404, detail={
+            "code": "doc_not_found",
+            "message": "文档不存在",
+        })
+
+    full_text = "\n".join(c["content"] for c in doc.get("chunks", []))
+    if not full_text.strip():
+        raise HTTPException(status_code=400, detail={
+            "code": "empty_doc",
+            "message": "文档没有可摘要的文字内容",
+        })
+
+    # 摘要不需要全文，截断到 6000 字以内足够覆盖要点
+    _SUMMARY_MAX_CHARS = 6000
+    trimmed = full_text[:_SUMMARY_MAX_CHARS]
+    started = time.perf_counter()
+    try:
+        resp = client.chat.completions.create(
+            model=CHAT_MODEL,
+            messages=[
+                {
+                    "role": "system",
+                    "content": "你是企业文档摘要助手。请用 200 字以内概括下面文档的核心内容，"
+                               "分 3-5 个要点输出，不要输出与文档无关的内容。",
+                },
+                {"role": "user", "content": trimmed},
+            ],
+            stream=False,
+        )
+    except Exception as e:
+        logger.exception("[%s] 摘要生成失败 doc_id=%s", request_id, doc_id)
+        raise HTTPException(status_code=500, detail={
+            "code": "summary_failed",
+            "message": f"摘要生成失败：{e}",
+        })
+
+    summary = resp.choices[0].message.content or ""
+    logger.info(
+        "[%s] 摘要完成 doc_id=%s 原文=%d字 摘要=%d字 耗时=%.0fms",
+        request_id, doc_id, len(full_text), len(summary),
+        (time.perf_counter() - started) * 1000,
+    )
+    return {
+        "doc_id": doc_id,
+        "title": doc["title"],
+        "summary": summary,
+        "source_chars": len(full_text),
+    }
