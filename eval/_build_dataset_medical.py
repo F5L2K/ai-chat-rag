@@ -1,0 +1,111 @@
+# -*- coding: utf-8 -*-
+"""生成医学标注集第一批：dataset_medical.json（40 题核心集）。
+
+设计规则：
+- 四篇文档各 10 题，优先名词解释 / 简答 / 论述（答案定位清晰）；
+- query 为改写问句，不与原文陈述句重合；
+- must_contain 必须是被标注块内的原文子串（run_eval 按子串匹配）；
+- expect_section 取解析器产出的章节路径，子串匹配即可命中。
+"""
+
+import json
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
+
+from app.services.parsing import parse_document  # noqa: E402
+
+CORPUS = Path(__file__).resolve().parent / "corpus_medical"
+
+# ---------- 40 题数据（id / question / doc / must_contain / expect_section） ----------
+
+QUESTIONS = [
+    # ===== 中医内科习题集（m01-m10）=====
+    {"id": "m01", "question": "中医经典描述中，咳嗽一般以什么并见？", "doc": "中医内科习题集", "must_contain": ["痰声多并见"], "expect_section": "第一章 肺系病证 > 一、填空题"},
+    {"id": "m02", "question": "哪位明代医家将咳嗽划分为外感和内伤两大类？", "doc": "中医内科习题集", "must_contain": ["张景岳"], "expect_section": "第一章 肺系病证 > 一、填空题"},
+    {"id": "m03", "question": "哮病的辨证属邪实正虚，其发作期与未发作期的邪正关系有何差异？", "doc": "中医内科习题集", "must_contain": ["邪实正虚"], "expect_section": "第一章 肺系病证 > 一、填空题"},
+    {"id": "m04", "question": "肺痨的四大证候特征分别是什么？", "doc": "中医内科习题集", "must_contain": ["咳嗽、咯血、潮热、盗汗"], "expect_section": "第一章 肺系病证 > 一、填空题"},
+    {"id": "m05", "question": "咳嗽辨证属风热犯肺证时，常用的代表方剂是哪一个？", "doc": "中医内科习题集", "must_contain": ["桑杏汤"], "expect_section": "第一章 肺系病证 > 二、单项选择题："},
+    {"id": "m06", "question": "心悸发作时患者自觉的典型症状体验包括哪些？", "doc": "中医内科习题集", "must_contain": ["自觉发作性心慌不安"], "expect_section": "第一章 肺系病证 > 四、论述题"},
+    {"id": "m07", "question": "中医认为内伤致咳的根本病机可概括为什么？", "doc": "中医内科习题集", "must_contain": ["脏腑功能失于调节"], "expect_section": "第一章 肺系病证 > 四、问答题："},
+    {"id": "m08", "question": "胃痛的发病与哪两个脏腑的关系最为密切？", "doc": "中医内科习题集", "must_contain": ["胃痛与肝脾的关系最为密切"], "expect_section": "第三章 脾胃肠病证 > 一、填空题："},
+    {"id": "m09", "question": "水肿发病中肾、肺、脾三脏各自的地位是怎样的？", "doc": "中医内科习题集", "must_contain": ["以肾为本，以肺为标"], "expect_section": "第五章肾系病证 > 一、填空题"},
+    {"id": "m10", "question": "郁病各种证型所共有的证候特征是什么？", "doc": "中医内科习题集", "must_contain": ["精神抑郁、情绪不定、胸胁胀满疼痛"], "expect_section": "第六章气血津液病证 > 一、填空题："},
+
+    # ===== 传染病题库（m11-m20）=====
+    {"id": "m11", "question": "病原体的致病能力具体包括哪几个方面？", "doc": "传染病题库", "must_contain": ["侵袭力、毒力、数量、变异性"], "expect_section": "填空题"},
+    {"id": "m12", "question": "传染病流行过程的三个基本环节是什么？", "doc": "传染病题库", "must_contain": ["传染源、传染途径、易感人群"], "expect_section": "填空题"},
+    {"id": "m13", "question": "发现禽流感疫情后应在什么时限内报告？", "doc": "传染病题库", "must_contain": ["不能超过2 小时"], "expect_section": "填空题"},
+    {"id": "m14", "question": "传染病防治法将法定传染病分为哪三类？甲类传染病有多少种？", "doc": "传染病题库", "must_contain": ["传染病分三类，甲类2 种"], "expect_section": "填空题"},
+    {"id": "m15", "question": "传染病感染过程的表现类型有哪些？", "doc": "传染病题库", "must_contain": ["病原体被清除、隐性感染、显性感染"], "expect_section": "填空题"},
+    {"id": "m16", "question": "传染病的定义是什么？", "doc": "传染病题库", "must_contain": ["病原微生物和寄生虫"], "expect_section": "名词解释"},
+    {"id": "m17", "question": "感染性疾病与传染病之间存在怎样的包含关系？", "doc": "传染病题库", "must_contain": ["包括传染病和非传染性感染性疾病"], "expect_section": "名词解释"},
+    {"id": "m18", "question": "什么叫暴发流行？", "doc": "传染病题库", "must_contain": ["发病时间的分布高度集中于一个短时间之内"], "expect_section": "名词解释"},
+    {"id": "m19", "question": "传染病患者进入恢复期后症状再次出现，这种情况称为什么？", "doc": "传染病题库", "must_contain": ["使发热等症状再次出现"], "expect_section": "名词解释"},
+    {"id": "m20", "question": "影响传染病流行过程的自然因素和社会因素分别包括哪些？", "doc": "传染病题库", "must_contain": ["社会制度、经济状况"], "expect_section": "简答题"},
+
+    # ===== 推拿题库（m21-m30）=====
+    {"id": "m21", "question": "推拿在古代又称为什么？", "doc": "推拿题库", "must_contain": ["按摩、按跷"], "expect_section": "推拿治疗学 > 一、填空题"},
+    {"id": "m22", "question": "我国现存最早的按摩专著是哪一部？", "doc": "推拿题库", "must_contain": ["黄帝岐伯按摩十卷"], "expect_section": "推拿治疗学 > 一、填空题"},
+    {"id": "m23", "question": "影响推拿治疗作用的三要素是什么？", "doc": "推拿题库", "must_contain": ["手法作用的性质和量"], "expect_section": "推拿治疗学 > 一、填空题"},
+    {"id": "m24", "question": "推拿治疗的八种基本治法分别是什么？", "doc": "推拿题库", "must_contain": ["温、通、补、泻、汗、和、散、清"], "expect_section": "推拿治疗学 > 一、填空题"},
+    {"id": "m25", "question": "握拳试验阳性提示哪种疾病？", "doc": "推拿题库", "must_contain": ["桡骨茎突狭窄性腱鞘炎"], "expect_section": "推拿治疗学 > 一、填空题"},
+    {"id": "m26", "question": "压顶试验阳性提示何处损伤？", "doc": "推拿题库", "must_contain": ["颈神经根"], "expect_section": "推拿治疗学 > 一、填空题"},
+    {"id": "m27", "question": "正常肘关节伸直时的轻度外翻角度，在医学上称为什么？", "doc": "推拿题库", "must_contain": ["携带角"], "expect_section": "推拿治疗学 > 四、名词解释"},
+    {"id": "m28", "question": "挺髌试验阳性通常提示什么病变？", "doc": "推拿题库", "must_contain": ["髌骨劳损"], "expect_section": "推拿治疗学 > 四、名词解释"},
+    {"id": "m29", "question": "落枕的推拿治疗原则是什么？", "doc": "推拿题库", "must_contain": ["舒筋活血"], "expect_section": "推拿治疗学 > 六、论述题（10分）"},
+    {"id": "m30", "question": "肩周炎临床检查时，压痛点通常出现在哪些穴位附近？", "doc": "推拿题库", "must_contain": ["肩内陵"], "expect_section": "推拿治疗学 > 五、简答题"},
+
+    # ===== 西医内科（m31-m40）=====
+    {"id": "m31", "question": "COPD（慢性阻塞性肺病）是一种什么性质的肺部疾病？", "doc": "西医内科", "must_contain": ["气流受限不完全可逆"], "expect_section": "名词解释："},
+    {"id": "m32", "question": "慢性支气管炎的定义要点是什么？", "doc": "西医内科", "must_contain": ["慢性非特异性炎症"], "expect_section": "名词解释："},
+    {"id": "m33", "question": "肺炎球菌肺炎的病因是什么？", "doc": "西医内科", "must_contain": ["肺炎球菌引起的急性肺部感染"], "expect_section": "名词解释："},
+    {"id": "m34", "question": "心力衰竭综合征在静脉回流适量情况下的主要表现是什么？", "doc": "西医内科", "must_contain": ["水、纳潴留"], "expect_section": "名词解释："},
+    {"id": "m35", "question": "高血压的主要临床特点是什么？", "doc": "西医内科", "must_contain": ["体循环动脉压增高"], "expect_section": "名词解释："},
+    {"id": "m36", "question": "恶性高血压的典型好发人群与临床特征是什么？", "doc": "西医内科", "must_contain": ["多见于中、青年"], "expect_section": "名词解释："},
+    {"id": "m37", "question": "心绞痛发作时的典型疼痛部位在哪里？", "doc": "西医内科", "must_contain": ["胸骨后或心前区疼痛"], "expect_section": "名词解释："},
+    {"id": "m38", "question": "急性心肌梗死的病理本质是什么？", "doc": "西医内科", "must_contain": ["严重持久性的发生局部坏死"], "expect_section": "名词解释："},
+    {"id": "m39", "question": "判断气流受阻、诊断 COPD 及评估严重程度最有意义的客观检查是什么？", "doc": "西医内科", "must_contain": ["肺功能检查"], "expect_section": "填空题："},
+    {"id": "m40", "question": "慢性支气管炎最主要的致病因素是什么？", "doc": "西医内科", "must_contain": ["吸烟（主要原因）"], "expect_section": "简答题："},
+]
+
+DATASET = {
+    "description": "医学领域真实题库外部验证集（第一批 40 题核心集）：中医内科习题集 / 传染病题库 / 推拿题库 / 西医内科 各 10 题。语料来自真实医学题库文档（eval/corpus_medical/）。query 为改写问句，must_contain 为答案块原文子串，expect_section 为解析器产出章节路径。",
+    "note": "第一批核心集：优先名词解释 / 简答 / 论述类低改写成本题型。第二批 60 题扩展集将覆盖填空 / 跨文档检索。",
+    "questions": QUESTIONS,
+}
+
+
+def _check_must_contain() -> list[str]:
+    """校验：must_contain 必须是期望文档对应语料的原文子串（跨所有块）。"""
+    texts: dict[str, str] = {}
+    for f in sorted(CORPUS.glob("*.md")):
+        res = parse_document(f.name, str(CORPUS / f.name))
+        texts[f.stem] = "\n".join(b.text for b in res.blocks)
+    problems = []
+    for q in QUESTIONS:
+        if q["doc"] not in texts:
+            problems.append(f"{q['id']}: 找不到文档 {q['doc']}")
+            continue
+        for kw in q["must_contain"]:
+            if kw not in texts[q["doc"]]:
+                problems.append(f"{q['id']}: 关键词不在原文中 -> {kw}")
+    return problems
+
+
+def main() -> None:
+    problems = _check_must_contain()
+    if problems:
+        print("校验失败：")
+        for p in problems:
+            print("  -", p)
+        sys.exit(1)
+    out = Path(__file__).resolve().parent / "dataset_medical.json"
+    out.write_text(json.dumps(DATASET, ensure_ascii=False, indent=2), encoding="utf-8", newline="\n")
+    print(f"生成完成：{out.name} 共 {len(QUESTIONS)} 题，全部 must_contain 已在原文中核验通过。")
+
+
+if __name__ == "__main__":
+    main()
